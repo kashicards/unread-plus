@@ -34,7 +34,7 @@ export interface FolderCount {
 }
 
 export const DEFAULT_STATUS_CONFIGS: StatusConfig[] = [
-  { id: 'unread', label: 'Unread', color: '#FA6300', countsAsOpen: true },
+  { id: 'unread', label: 'Unread', color: '#4285F4', countsAsOpen: true },
   { id: 'skip',   label: 'Skip',   color: '#888888', countsAsOpen: false },
   { id: 'review', label: 'Review', color: '#2066DF', countsAsOpen: true },
 ];

@@ -87,7 +87,7 @@ export class BadgeRenderer {
       const badge = document.createElement('span');
       badge.className = 'unread-plus-folder-badge';
       badge.style.setProperty('--badge-color', count.dominantColor);
-      badge.textContent = `(${count.total})`;
+      badge.textContent = `${count.total}●`;
       titleEl.appendChild(badge);
     });
   }
