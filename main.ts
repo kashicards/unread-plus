@@ -10,6 +10,7 @@ export default class UnreadPlusPlugin extends Plugin {
   reviewMode!: ReviewMode;
 
   private autoReadTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private isLayoutReady = false;
 
   async onload(): Promise<void> {
     this.stateManager = new StateManager(this);
@@ -36,11 +37,17 @@ export default class UnreadPlusPlugin extends Plugin {
   }
 
   private registerVaultEvents(): void {
-    // Only listen to create events after layout is ready to skip initial vault scan
+    // Register immediately so external file creations (e.g. from scripts) are not missed.
+    // isLayoutReady guards against marking the entire vault on initial load.
+    this.registerEvent(
+      this.app.vault.on('create', (file: TAbstractFile) => {
+        if (!this.isLayoutReady) return;
+        this.onFileCreated(file);
+      })
+    );
+
     this.app.workspace.onLayoutReady(() => {
-      this.registerEvent(
-        this.app.vault.on('create', (file: TAbstractFile) => this.onFileCreated(file))
-      );
+      this.isLayoutReady = true;
     });
 
     this.registerEvent(
