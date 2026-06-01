@@ -28,6 +28,7 @@ export default class UnreadPlusPlugin extends Plugin {
   }
 
   async onunload(): Promise<void> {
+    this.reviewMode.stop();
     this.badgeRenderer.stop();
     this.autoReadTimers.forEach(t => clearTimeout(t));
     this.autoReadTimers.clear();
@@ -152,7 +153,10 @@ export default class UnreadPlusPlugin extends Plugin {
           const folder = file.parent?.path ?? '';
           const statuses = this.stateManager.getAllFileStatuses();
           for (const path of Object.keys(statuses)) {
-            if (path.startsWith(folder + '/') || path === folder) {
+            const inFolder = folder === ''
+              ? !path.includes('/')
+              : path.startsWith(folder + '/');
+            if (inFolder) {
               this.stateManager.clearStatus(path);
             }
           }

@@ -74,7 +74,7 @@ export class StateManager {
   // --- Status configs ---
 
   getStatusConfigs(): StatusConfig[] {
-    return this.data.statusConfigs;
+    return [...this.data.statusConfigs];
   }
 
   getStatusConfig(id: string): StatusConfig | undefined {
@@ -100,7 +100,8 @@ export class StateManager {
   isIgnored(path: string): boolean {
     const { ignorePaths, ignoreExtensions } = this.data.settings;
     if (ignorePaths.some(p => path === p || path.startsWith(p + '/'))) return true;
-    const ext = path.includes('.') ? path.split('.').pop()! : '';
+    const basename = path.split('/').pop() ?? '';
+    const ext = basename.includes('.') ? basename.split('.').pop()! : '';
     return ignoreExtensions.includes(ext);
   }
 }

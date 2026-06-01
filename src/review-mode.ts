@@ -6,6 +6,7 @@ export class ReviewMode {
   private queue: string[] = [];
   private index = -1;
   private active = false;
+  private autoMarkTimer: ReturnType<typeof setTimeout> | null = null;
 
   isActive(): boolean {
     return this.active;
@@ -42,35 +43,42 @@ export class ReviewMode {
   async next(app: App, stateManager: StateManager, plugin: UnreadPlusPlugin): Promise<void> {
     if (!this.active) return;
 
-    this.index++;
+    while (true) {
+      this.index++;
 
-    if (this.index >= this.queue.length) {
-      this.active = false;
-      this.queue = [];
-      new Notice('Unread+: All clear ✓');
+      if (this.index >= this.queue.length) {
+        this.stop();
+        new Notice('Unread+: All clear ✓');
+        return;
+      }
+
+      const path = this.queue[this.index];
+      const file = app.vault.getAbstractFileByPath(path);
+
+      if (!(file instanceof TFile)) {
+        continue; // skip deleted files, try next
+      }
+
+      await app.workspace.getLeaf(false).openFile(file);
+
+      const seconds = stateManager.getSettings().reviewAutoMarkSeconds;
+      if (seconds > 0) {
+        if (this.autoMarkTimer !== null) clearTimeout(this.autoMarkTimer);
+        this.autoMarkTimer = setTimeout(() => {
+          plugin.clearFileStatus(path);
+          this.autoMarkTimer = null;
+        }, seconds * 1000);
+      }
+
       return;
-    }
-
-    const path = this.queue[this.index];
-    const file = app.vault.getAbstractFileByPath(path);
-
-    if (!(file instanceof TFile)) {
-      // file was deleted since queue was built — skip
-      await this.next(app, stateManager, plugin);
-      return;
-    }
-
-    await app.workspace.getLeaf(false).openFile(file);
-
-    const seconds = stateManager.getSettings().reviewAutoMarkSeconds;
-    if (seconds > 0) {
-      setTimeout(() => {
-        plugin.clearFileStatus(path);
-      }, seconds * 1000);
     }
   }
 
   stop(): void {
+    if (this.autoMarkTimer !== null) {
+      clearTimeout(this.autoMarkTimer);
+      this.autoMarkTimer = null;
+    }
     this.active = false;
     this.queue = [];
     this.index = -1;
