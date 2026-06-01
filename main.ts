@@ -203,6 +203,8 @@ export default class UnreadPlusPlugin extends Plugin {
   private registerContextMenu(): void {
     this.registerEvent(
       this.app.workspace.on('file-menu', (menu, file) => {
+        if (!(file instanceof TFile)) return;
+
         const configs = this.stateManager.getStatusConfigs();
         const current = this.stateManager.getStatus(file.path);
 

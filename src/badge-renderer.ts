@@ -96,18 +96,12 @@ export class BadgeRenderer {
     const container = this.getExplorerContainer();
     if (!container) return;
 
-    this.observer = new MutationObserver(mutations => {
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+    this.observer = new MutationObserver(() => {
       if (this.isRendering) return;
-      // only re-render when nav-file or nav-folder nodes are added/removed
-      const relevant = mutations.some(m =>
-        [...Array.from(m.addedNodes), ...Array.from(m.removedNodes)].some(n =>
-          n instanceof HTMLElement &&
-          (n.classList.contains('nav-file') ||
-           n.classList.contains('nav-folder') ||
-           n.classList.contains('nav-folder-children'))
-        )
-      );
-      if (relevant) this.refresh();
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => this.refresh(), 50);
     });
 
     this.observer.observe(container, { childList: true, subtree: true });

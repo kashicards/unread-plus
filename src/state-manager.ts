@@ -18,6 +18,16 @@ export class StateManager {
       statusConfigs: saved.statusConfigs ?? DEFAULT_DATA.statusConfigs,
       fileStatuses: saved.fileStatuses ?? {},
     };
+    this.migrate();
+  }
+
+  private migrate(): void {
+    // v1 → v2: change default unread orange to blue
+    if ((this.data.version ?? 1) < 2) {
+      const unread = this.data.statusConfigs.find(s => s.id === 'unread');
+      if (unread && unread.color === '#FA6300') unread.color = '#4285F4';
+      this.data.version = 2;
+    }
   }
 
   async save(): Promise<void> {
