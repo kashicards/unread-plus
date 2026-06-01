@@ -1,0 +1,10 @@
+{
+  "id": "unread-plus",
+  "name": "Unread+",
+  "version": "1.0.0",
+  "minAppVersion": "1.4.0",
+  "description": "Marks new files with a dot. Propagates unread counts up the folder tree.",
+  "author": "yourname",
+  "authorUrl": "",
+  "isDesktopOnly": false
+}
