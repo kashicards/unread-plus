@@ -26,6 +26,7 @@ export interface PluginData {
   fileStatuses: Record<string, FileStatus>;
   statusConfigs: StatusConfig[];
   settings: UnreadPlusSettings;
+  knownPaths: string[];
 }
 
 export interface FolderCount {
@@ -55,4 +56,5 @@ export const DEFAULT_DATA: PluginData = {
   fileStatuses: {},
   statusConfigs: DEFAULT_STATUS_CONFIGS,
   settings: DEFAULT_SETTINGS,
+  knownPaths: [],
 };

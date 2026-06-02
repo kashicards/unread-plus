@@ -17,6 +17,7 @@ export class StateManager {
       settings: { ...DEFAULT_DATA.settings, ...saved.settings },
       statusConfigs: saved.statusConfigs ?? DEFAULT_DATA.statusConfigs,
       fileStatuses: saved.fileStatuses ?? {},
+      knownPaths: saved.knownPaths ?? [],
     };
     this.migrate();
   }
@@ -79,6 +80,16 @@ export class StateManager {
 
   clearAll(): void {
     this.data.fileStatuses = {};
+  }
+
+  // --- Offline-creation snapshot ---
+
+  getKnownPaths(): Set<string> {
+    return new Set(this.data.knownPaths);
+  }
+
+  setKnownPaths(paths: string[]): void {
+    this.data.knownPaths = paths;
   }
 
   // --- Status configs ---

@@ -33,6 +33,7 @@ export default class UnreadPlusPlugin extends Plugin {
     this.badgeRenderer.stop();
     this.autoReadTimers.forEach(t => clearTimeout(t));
     this.autoReadTimers.clear();
+    this.stateManager.setKnownPaths(this.app.vault.getFiles().map(f => f.path));
     await this.stateManager.save();
   }
 
@@ -48,6 +49,7 @@ export default class UnreadPlusPlugin extends Plugin {
 
     this.app.workspace.onLayoutReady(() => {
       this.isLayoutReady = true;
+      this.detectOfflineCreations();
     });
 
     this.registerEvent(
@@ -69,6 +71,25 @@ export default class UnreadPlusPlugin extends Plugin {
     this.registerEvent(
       this.app.workspace.on('file-open', (file: TFile | null) => this.onFileOpen(file))
     );
+  }
+
+  private detectOfflineCreations(): void {
+    const known = this.stateManager.getKnownPaths();
+    if (known.size === 0) return; // first run — no baseline yet
+
+    let changed = false;
+    for (const file of this.app.vault.getFiles()) {
+      if (known.has(file.path)) continue;
+      if (this.stateManager.isIgnored(file.path)) continue;
+      if (this.stateManager.getStatus(file.path)) continue; // already has a status
+      this.stateManager.setStatus(file.path, 'unread');
+      changed = true;
+    }
+
+    if (changed) {
+      this.stateManager.save();
+      this.badgeRenderer.refresh();
+    }
   }
 
   private onFileCreated(file: TAbstractFile): void {
