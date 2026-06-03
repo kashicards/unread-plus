@@ -75,21 +75,22 @@ export default class UnreadPlusPlugin extends Plugin {
 
   private detectOfflineCreations(): void {
     const known = this.stateManager.getKnownPaths();
-    if (known.size === 0) return; // first run — no baseline yet
+    const currentFiles = this.app.vault.getFiles();
 
-    let changed = false;
-    for (const file of this.app.vault.getFiles()) {
-      if (known.has(file.path)) continue;
-      if (this.stateManager.isIgnored(file.path)) continue;
-      if (this.stateManager.getStatus(file.path)) continue; // already has a status
-      this.stateManager.setStatus(file.path, 'unread');
-      changed = true;
+    if (known.size > 0) {
+      for (const file of currentFiles) {
+        if (known.has(file.path)) continue;
+        if (this.stateManager.isIgnored(file.path)) continue;
+        if (this.stateManager.getStatus(file.path)) continue;
+        this.stateManager.setStatus(file.path, 'unread');
+      }
     }
 
-    if (changed) {
-      this.stateManager.save();
-      this.badgeRenderer.refresh();
-    }
+    // Always persist the current baseline so the next session can detect new files
+    // even if onunload's async save didn't complete before the process exited.
+    this.stateManager.setKnownPaths(currentFiles.map(f => f.path));
+    this.stateManager.save();
+    this.badgeRenderer.refresh();
   }
 
   private onFileCreated(file: TAbstractFile): void {
