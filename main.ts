@@ -34,6 +34,7 @@ export default class UnreadPlusPlugin extends Plugin {
     this.autoReadTimers.forEach(t => clearTimeout(t));
     this.autoReadTimers.clear();
     this.stateManager.setKnownPaths(this.app.vault.getFiles().map(f => f.path));
+    this.stateManager.setLastCloseTime(Date.now());
     await this.stateManager.save();
   }
 
@@ -65,7 +66,10 @@ export default class UnreadPlusPlugin extends Plugin {
 
   private registerWorkspaceEvents(): void {
     this.registerEvent(
-      this.app.workspace.on('layout-change', () => this.badgeRenderer.refresh())
+      this.app.workspace.on('layout-change', () => {
+        this.badgeRenderer.tryAttachObserver();
+        this.badgeRenderer.refresh();
+      })
     );
 
     this.registerEvent(
@@ -75,22 +79,38 @@ export default class UnreadPlusPlugin extends Plugin {
 
   private detectOfflineCreations(): void {
     const known = this.stateManager.getKnownPaths();
+    const lastClose = this.stateManager.getLastCloseTime();
     const currentFiles = this.app.vault.getFiles();
 
-    if (known.size > 0) {
+    console.log(`[Unread+] detectOfflineCreations: known=${known.size} lastClose=${lastClose} current=${currentFiles.length}`);
+
+    const hasBaseline = known.size > 0 || lastClose > 0;
+
+    if (hasBaseline) {
       for (const file of currentFiles) {
-        if (known.has(file.path)) continue;
         if (this.stateManager.isIgnored(file.path)) continue;
         if (this.stateManager.getStatus(file.path)) continue;
-        this.stateManager.setStatus(file.path, 'unread');
+
+        const isNewPath = known.size > 0 && !known.has(file.path);
+        // Also catch files that were overwritten while Obsidian was closed
+        // (same path but mtime is after the last clean close).
+        const isModifiedOffline = lastClose > 0 && file.stat.mtime > lastClose;
+
+        if (isNewPath || isModifiedOffline) {
+          console.log(`[Unread+] Offline change: ${file.path} (new=${isNewPath} modified=${isModifiedOffline})`);
+          this.stateManager.setStatus(file.path, 'unread');
+        }
       }
+    } else {
+      console.log('[Unread+] No baseline yet — skipping offline detection');
     }
 
-    // Always persist the current baseline so the next session can detect new files
-    // even if onunload's async save didn't complete before the process exited.
-    this.stateManager.setKnownPaths(currentFiles.map(f => f.path));
-    this.stateManager.save();
-    this.badgeRenderer.refresh();
+    if (currentFiles.length > 0) {
+      this.stateManager.setKnownPaths(currentFiles.map(f => f.path));
+      this.stateManager.save();
+    }
+
+    setTimeout(() => this.badgeRenderer.refresh(), 150);
   }
 
   private onFileCreated(file: TAbstractFile): void {
@@ -197,15 +217,23 @@ export default class UnreadPlusPlugin extends Plugin {
     });
 
     this.addCommand({
-      id: 'start-review',
-      name: 'Start review',
-      checkCallback: (checking: boolean) => {
-        if (!this.stateManager.getSettings().reviewEnabled) return false;
-        if (!checking) {
+      id: 'open-next-unread',
+      name: 'Open next unread',
+      hotkeys: [{ modifiers: ['Mod', 'Shift'], key: 'U' }],
+      callback: () => {
+        if (!this.reviewMode.isActive()) {
           this.reviewMode.start(this.stateManager);
-          this.reviewMode.next(this.app, this.stateManager, this);
         }
-        return true;
+        this.reviewMode.next(this.app, this.stateManager, this);
+      },
+    });
+
+    this.addCommand({
+      id: 'start-review',
+      name: 'Restart queue from beginning',
+      callback: () => {
+        this.reviewMode.start(this.stateManager);
+        this.reviewMode.next(this.app, this.stateManager, this);
       },
     });
 
@@ -234,21 +262,34 @@ export default class UnreadPlusPlugin extends Plugin {
 
         for (const config of configs) {
           if (current?.statusId === config.id) continue;
-          menu.addItem(item =>
+          menu.addItem(item => {
+            const frag = document.createDocumentFragment();
+            const dot = document.createElement('span');
+            dot.textContent = '● ';
+            dot.style.cssText = `color:${config.color};font-size:10px;margin-right:2px;`;
+            frag.appendChild(dot);
+            frag.appendChild(document.createTextNode(config.label));
             item
-              .setTitle(`Mark as ${config.label}`)
-              .setIcon('circle')
-              .onClick(() => this.setFileStatus(file.path, config.id))
-          );
+              .setTitle(frag)
+              .onClick(() => this.setFileStatus(file.path, config.id));
+          });
         }
 
         if (current) {
-          menu.addItem(item =>
+          const currentConfig = configs.find(c => c.id === current.statusId);
+          menu.addItem(item => {
+            const frag = document.createDocumentFragment();
+            if (currentConfig) {
+              const dot = document.createElement('span');
+              dot.textContent = '○ ';
+              dot.style.cssText = `color:${currentConfig.color};font-size:10px;margin-right:2px;`;
+              frag.appendChild(dot);
+            }
+            frag.appendChild(document.createTextNode('Mark as read'));
             item
-              .setTitle('Mark as read')
-              .setIcon('check')
-              .onClick(() => this.clearFileStatus(file.path))
-          );
+              .setTitle(frag)
+              .onClick(() => this.clearFileStatus(file.path));
+          });
         }
       })
     );

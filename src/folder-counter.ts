@@ -28,10 +28,13 @@ export function computeFolderCounts(
 
   const result = new Map<string, FolderCount>();
   for (const [folderPath, statusCounts] of folderStatusCounts) {
-    const total = [...statusCounts.values()].reduce((a, b) => a + b, 0);
-    const [dominantId] = [...statusCounts.entries()].sort((a, b) => b[1] - a[1])[0];
-    const dominantColor = openConfigs.get(dominantId)?.color ?? '#FA6300';
-    result.set(folderPath, { total, dominantColor });
+    // Keep segments in statusConfigs order so display is consistent
+    const segments = statusConfigs
+      .filter(s => s.countsAsOpen && statusCounts.has(s.id))
+      .map(s => ({ count: statusCounts.get(s.id)!, color: s.color }));
+    if (segments.length > 0) {
+      result.set(folderPath, { segments });
+    }
   }
 
   return result;

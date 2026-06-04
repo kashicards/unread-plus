@@ -167,25 +167,17 @@ export class SettingsTab extends PluginSettingTab {
   }
 
   private renderReviewSection(el: HTMLElement): void {
-    el.createEl('h2', { text: 'Review Mode' });
+    el.createEl('h2', { text: 'Queue (Ctrl+Shift+U)' });
+    el.createEl('p', {
+      text: 'Opens all files with a status (Unread, Later, …) one by one. "Counts as open" on each status controls which ones appear here.',
+      cls: 'setting-item-description',
+    });
 
     new Setting(el)
-      .setName('Enable Review Mode')
-      .setDesc('Adds "Start Review" and "Next in Review" commands to the command palette.')
-      .addToggle(toggle => {
-        toggle
-          .setValue(this.plugin.stateManager.getSettings().reviewEnabled)
-          .onChange(async value => {
-            this.plugin.stateManager.updateSettings({ reviewEnabled: value });
-            await this.plugin.stateManager.save();
-          });
-      });
-
-    new Setting(el)
-      .setName('Review order')
+      .setName('Queue order')
       .addDropdown(drop => {
         drop
-          .addOption('created', 'By creation date')
+          .addOption('created', 'Oldest first')
           .addOption('folder', 'By folder')
           .addOption('random', 'Random')
           .setValue(this.plugin.stateManager.getSettings().reviewOrder)
@@ -198,8 +190,8 @@ export class SettingsTab extends PluginSettingTab {
       });
 
     new Setting(el)
-      .setName('Auto-mark read in review (seconds)')
-      .setDesc('Automatically mark the current review file as read after this many seconds. Set 0 to disable.')
+      .setName('Auto-mark as read (seconds)')
+      .setDesc('Auto-clear status after this many seconds of the file being open. 0 = off.')
       .addText(text => {
         text
           .setValue(String(this.plugin.stateManager.getSettings().reviewAutoMarkSeconds))
@@ -209,19 +201,6 @@ export class SettingsTab extends PluginSettingTab {
               this.plugin.stateManager.updateSettings({ reviewAutoMarkSeconds: n });
               await this.plugin.stateManager.save();
             }
-          });
-      });
-
-    new Setting(el)
-      .setName('Statuses included in review')
-      .setDesc('Comma-separated status IDs (e.g. "unread, review").')
-      .addText(text => {
-        text
-          .setValue(this.plugin.stateManager.getSettings().reviewStatusFilter.join(', '))
-          .onChange(async value => {
-            const ids = value.split(',').map(s => s.trim()).filter(Boolean);
-            this.plugin.stateManager.updateSettings({ reviewStatusFilter: ids });
-            await this.plugin.stateManager.save();
           });
       });
   }

@@ -18,6 +18,7 @@ export class StateManager {
       statusConfigs: saved.statusConfigs ?? DEFAULT_DATA.statusConfigs,
       fileStatuses: saved.fileStatuses ?? {},
       knownPaths: saved.knownPaths ?? [],
+      lastCloseTime: saved.lastCloseTime ?? 0,
     };
     this.migrate();
   }
@@ -28,6 +29,26 @@ export class StateManager {
       const unread = this.data.statusConfigs.find(s => s.id === 'unread');
       if (unread && unread.color === '#FA6300') unread.color = '#4285F4';
       this.data.version = 2;
+    }
+    // v2 → v3: add json to ignoreExtensions
+    if (this.data.version < 3) {
+      if (!this.data.settings.ignoreExtensions.includes('json')) {
+        this.data.settings.ignoreExtensions.push('json');
+      }
+      this.data.version = 3;
+    }
+    // v3 → v4: replace skip+review presets with "later" (orange); fix queue filter
+    if (this.data.version < 4) {
+      const ids = this.data.statusConfigs.map(s => s.id);
+      if (ids.includes('skip') || ids.includes('review')) {
+        this.data.statusConfigs = this.data.statusConfigs.filter(
+          s => s.id !== 'skip' && s.id !== 'review'
+        );
+        if (!ids.includes('later')) {
+          this.data.statusConfigs.push({ id: 'later', label: 'Later', color: '#FF8C00', countsAsOpen: true });
+        }
+      }
+      this.data.version = 4;
     }
   }
 
@@ -90,6 +111,14 @@ export class StateManager {
 
   setKnownPaths(paths: string[]): void {
     this.data.knownPaths = paths;
+  }
+
+  getLastCloseTime(): number {
+    return this.data.lastCloseTime;
+  }
+
+  setLastCloseTime(ts: number): void {
+    this.data.lastCloseTime = ts;
   }
 
   // --- Status configs ---

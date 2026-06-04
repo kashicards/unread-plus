@@ -15,9 +15,7 @@ export interface UnreadPlusSettings {
   ignorePaths: string[];         // prefix-match, e.g. "Archive"
   ignoreExtensions: string[];    // without dot, e.g. ["pdf", "png"]
   badgeShowLabel: boolean;       // show "● unread" vs just "●"
-  reviewEnabled: boolean;
   reviewOrder: 'created' | 'folder' | 'random';
-  reviewStatusFilter: string[];  // statusIds to include in review queue
   reviewAutoMarkSeconds: number; // 0 = disabled
 }
 
@@ -27,34 +25,32 @@ export interface PluginData {
   statusConfigs: StatusConfig[];
   settings: UnreadPlusSettings;
   knownPaths: string[];
+  lastCloseTime: number; // Date.now() when Obsidian last closed cleanly
 }
 
 export interface FolderCount {
-  total: number;
-  dominantColor: string;
+  segments: Array<{ count: number; color: string }>;
 }
 
 export const DEFAULT_STATUS_CONFIGS: StatusConfig[] = [
   { id: 'unread', label: 'Unread', color: '#4285F4', countsAsOpen: true },
-  { id: 'skip',   label: 'Skip',   color: '#888888', countsAsOpen: false },
-  { id: 'review', label: 'Review', color: '#2066DF', countsAsOpen: true },
+  { id: 'later',  label: 'Later',  color: '#FF8C00', countsAsOpen: true },
 ];
 
 export const DEFAULT_SETTINGS: UnreadPlusSettings = {
   autoReadSeconds: 0,
   ignorePaths: [],
-  ignoreExtensions: [],
+  ignoreExtensions: ['json'],
   badgeShowLabel: false,
-  reviewEnabled: true,
   reviewOrder: 'created',
-  reviewStatusFilter: ['unread', 'review'],
   reviewAutoMarkSeconds: 0,
 };
 
 export const DEFAULT_DATA: PluginData = {
-  version: 1,
+  version: 4,
   fileStatuses: {},
   statusConfigs: DEFAULT_STATUS_CONFIGS,
   settings: DEFAULT_SETTINGS,
   knownPaths: [],
+  lastCloseTime: 0,
 };

@@ -15,9 +15,11 @@ export class ReviewMode {
   start(stateManager: StateManager): void {
     const settings = stateManager.getSettings();
     const statuses = stateManager.getAllFileStatuses();
-    const filterIds = new Set(settings.reviewStatusFilter);
+    const openIds = new Set(
+      stateManager.getStatusConfigs().filter(c => c.countsAsOpen).map(c => c.id)
+    );
 
-    let entries = Object.entries(statuses).filter(([, s]) => filterIds.has(s.statusId));
+    let entries = Object.entries(statuses).filter(([, s]) => openIds.has(s.statusId));
 
     if (settings.reviewOrder === 'created') {
       entries.sort((a, b) => a[1].markedAt - b[1].markedAt);

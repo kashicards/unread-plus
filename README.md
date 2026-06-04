@@ -1,144 +1,79 @@
 # Unread+
 
-An Obsidian plugin that marks newly created files with a status dot — and propagates unread counts up the entire folder tree.
+An Obsidian plugin that marks new files with a colored dot and propagates unread counts up the entire folder tree — so you never miss what's new, even in a collapsed vault.
 
-## The Problem
+![File explorer with dots and folder badge](docs/preview-explorer.png)
 
-Every existing unread plugin marks only the file itself. If your vault is collapsed and a script drops new files deep in subfolders, you see nothing. You have to manually expand every folder to find what's new.
-
-```
-❌ What other plugins show (vault collapsed):
-📁 Research
-📁 Design
-📁 Archive
-
-✅ What Unread+ shows:
-📁 Research    (5)   ← 5 unread somewhere inside
-📁 Design      (2)
-📁 Archive
-```
+---
 
 ## Features
 
-### Automatic Dot on New Files
+**Colored dots on files** — every new file gets a dot. Blue = Unread, Orange = Later. Colors and labels are fully customizable.
 
-Every file created inside your vault — whether manually in Obsidian or by an external script — gets a colored dot in the file explorer.
+**Folder badges with per-status counts** — the count propagates up the entire folder tree. If you have 1 unread and 1 later somewhere inside a folder, you see `1● 1●` with the right colors — at any depth, even collapsed.
 
-### Folder Badge with Count
+**Offline detection** — files created by scripts, sync tools (iCloud, Dropbox, Obsidian Sync), or anything else while Obsidian was closed are automatically picked up on the next launch.
 
-The unread count propagates upward through the entire folder tree. A folder badge shows how many unread files are somewhere inside, at any depth. The badge color reflects the dominant status in that folder.
+**Colored context menu** — right-click any file to set or clear its status. Each option shows a colored circle so you know exactly what you're picking.
 
-### Status System
+![Right-click context menu with colored circles](docs/preview-context-menu.png)
 
-Instead of just read/unread, you can define custom statuses — each with a name, color, and whether it counts as "open" (appears in folder badge counts).
-
-**Default statuses:**
-
-| Status | Color | Counts as open |
-|--------|-------|---------------|
-| Unread | Orange `#FA6300` | ✅ |
-| Skip   | Grey `#888888`   | ❌ |
-| Review | Blue `#2066DF`   | ✅ |
-
-### Right-Click Context Menu
-
-Right-click any file in the file explorer to set its status:
-
-- **Mark as Unread** — orange dot
-- **Mark as Review** — blue dot
-- **Mark as Skip** — grey dot, does not count toward folder badge
-- **Mark as read** — removes dot entirely
-
-### Commands
-
-Open the command palette (`Ctrl+P` / `Cmd+P`) and search for:
-
-| Command | What it does |
-|---------|-------------|
-| `Unread+: Mark all as read` | Clears all dots and badges across the entire vault |
-| `Unread+: Mark current file as unread` | Marks the active file as unread |
-| `Unread+: Mark all in current folder as read` | Clears all files in the active file's folder |
-| `Unread+: Start review` | Opens the first file in your review queue |
-| `Unread+: Next in review` | Advances to the next file in the queue |
-
-### Review Mode
-
-Work through all your open files one by one without touching the sidebar.
-
-1. Run **Start review** — opens the first unread/review file
-2. Read it, then run **Next in review** — next file opens
-3. Continue until you see **"Unread+: All clear ✓"**
-
-### Rename and Move
-
-Status follows files. Rename a file or move it to another folder — the dot stays on it and folder badges update automatically.
-
-### Auto-Read Timer
-
-Optionally mark a file as read automatically after you've had it open for N seconds. Set to `0` to disable.
-
-### Ignore Lists
-
-Prevent certain folders or file types from ever being marked unread:
-
-- **Ignored paths** — prefix match, e.g. `Templates` ignores everything under `Templates/`
-- **Ignored extensions** — e.g. `pdf, png` so attachments are never marked
+**Open Next Unread** — press `Ctrl+Shift+U` (Mac: `Cmd+Shift+U`) to open all unread files one by one. Hit it again for the next. When the queue is empty you get an "All clear ✓" notice.
 
 ---
 
 ## Installation
 
-### Manual
+> Not yet in the community plugin list. Install manually:
 
-1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](../../releases)
-2. Create the folder `.obsidian/plugins/unread-plus/` in your vault
-3. Copy the three files into that folder
-4. In Obsidian: **Settings → Community plugins → Unread+** → toggle on
+1. Download `main.js`, `manifest.json`, `styles.css` from the [latest release](../../releases/latest)
+2. Copy to `.obsidian/plugins/unread-plus/` in your vault
+3. Obsidian → Settings → Community Plugins → enable **Unread+**
 
-### From Source
-
+**From source:**
 ```bash
 git clone https://github.com/kashicards/unread-plus.git
 cd unread-plus
-npm install
-npm run build
+npm install && npm run build
 ```
 
-Copy `main.js`, `manifest.json`, and `styles.css` to `.obsidian/plugins/unread-plus/` in your vault.
+---
+
+## Usage
+
+| What | How |
+|------|-----|
+| Mark a file unread or later | Right-click the file → pick status |
+| Clear a file's status | Right-click → Mark as read |
+| Open next unread file | `Ctrl+Shift+U` |
+| Mark all as read | Command palette → *Mark all as read* |
+| Mark current file as unread | Command palette → *Mark current file as unread* |
+| Clear all in current folder | Command palette → *Mark all in current folder as read* |
 
 ---
 
 ## Settings
 
-Open **Settings → Unread+** to configure:
+![Settings page](docs/preview-settings.png)
 
-### General
+**General**
+- **Auto-read delay** — auto-clear status after N seconds of the file being open (0 = off)
+- **Show label in badge** — show `Unread ●` instead of just `●`
 
-- **Auto-read delay (seconds)** — automatically mark a file as read after it's been open this long. `0` = disabled.
-- **Show status label in badge** — display `● Unread` instead of just `●` next to file names.
+**Ignore**
+- **Ignored paths** — folder prefixes never tracked (e.g. `Templates`, `Archive`)
+- **Ignored extensions** — file types to skip (default: `json`)
 
-### Ignore
+**Statuses**
+- Add, rename, recolor statuses freely
+- **Counts as open** — whether this status shows up in folder badges and the `Ctrl+Shift+U` queue
 
-- **Ignored paths** — one path prefix per line. Files under these paths are never marked unread.
-- **Ignored extensions** — comma-separated, without dots (e.g. `pdf, png, jpg`).
-
-### Statuses
-
-Add, rename, recolor, or delete statuses. For each status:
-
-- **Color** — shown as the dot color on files and the badge color on folders
-- **Label** — appears in the right-click menu and optionally in the badge
-- **Counts as open** — if checked, this status contributes to folder badge counts
-
-### Review Mode
-
-- **Enable Review Mode** — shows/hides the Start Review and Next in Review commands
-- **Review order** — By creation date / By folder / Random
-- **Auto-mark read in review** — automatically clear status after N seconds in review. `0` = disabled.
-- **Statuses included in review** — comma-separated status IDs (e.g. `unread, review`)
+**Queue (Ctrl+Shift+U)**
+- Order: oldest first / by folder / random
+- Auto-mark as read after N seconds in queue (0 = off)
 
 ---
 
-## Known Limitation
+## How offline detection works
 
-The DOM injection uses Obsidian's `[data-path]` attributes on file explorer elements, which is stable public API. Folder badge injection relies on `.nav-folder-title` and `.nav-file-title` CSS selectors — these have been stable across Obsidian versions but could theoretically change in a major update.
+On startup, the plugin compares the current vault against a snapshot from the last session. Any file that is new or was modified after Obsidian last closed gets marked unread automatically. This covers scripts, sync tools, and anything else that writes to your vault while Obsidian is closed.

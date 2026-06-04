@@ -15,6 +15,10 @@ export class BadgeRenderer {
     });
   }
 
+  tryAttachObserver(): void {
+    if (!this.observer) this.attachObserver();
+  }
+
   stop(): void {
     this.observer?.disconnect();
     this.observer = null;
@@ -22,6 +26,7 @@ export class BadgeRenderer {
   }
 
   refresh(): void {
+    if (this.isRendering) return;
     const container = this.getExplorerContainer();
     if (!container) return;
 
@@ -64,7 +69,7 @@ export class BadgeRenderer {
       dot.style.setProperty('--dot-color', config.color);
 
       if (settings.badgeShowLabel) {
-        dot.textContent = ` ${config.label}`;
+        dot.setAttribute('data-label', config.label);
       }
 
       titleEl.appendChild(dot);
@@ -82,12 +87,16 @@ export class BadgeRenderer {
       if (!path) return;
 
       const count = folderCounts.get(path);
-      if (!count || count.total === 0) return;
+      if (!count || count.segments.length === 0) return;
 
       const badge = document.createElement('span');
       badge.className = 'unread-plus-folder-badge';
-      badge.style.setProperty('--badge-color', count.dominantColor);
-      badge.textContent = `${count.total}●`;
+      for (const seg of count.segments) {
+        const span = document.createElement('span');
+        span.textContent = `${seg.count}●`;
+        span.style.color = seg.color;
+        badge.appendChild(span);
+      }
       titleEl.appendChild(badge);
     });
   }
@@ -98,8 +107,21 @@ export class BadgeRenderer {
 
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
-    this.observer = new MutationObserver(() => {
+    this.observer = new MutationObserver((mutations) => {
       if (this.isRendering) return;
+      // Ignore mutations caused entirely by our own injected elements —
+      // otherwise adding dots triggers a re-render which adds dots which triggers...
+      const isOwnChange = mutations.every(m => {
+        const isOwnNode = (n: Node) =>
+          n instanceof Element &&
+          (n.classList.contains('unread-plus-dot') ||
+           n.classList.contains('unread-plus-folder-badge'));
+        return (
+          Array.from(m.addedNodes).every(isOwnNode) &&
+          Array.from(m.removedNodes).every(isOwnNode)
+        );
+      });
+      if (isOwnChange) return;
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(() => this.refresh(), 50);
     });

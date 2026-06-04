@@ -3,15 +3,19 @@ import { computeFolderCounts } from '../src/folder-counter';
 import { StatusConfig, FileStatus } from '../src/types';
 
 const CONFIGS: StatusConfig[] = [
-  { id: 'unread', label: 'Unread', color: '#FA6300', countsAsOpen: true },
+  { id: 'unread', label: 'Unread', color: '#4285F4', countsAsOpen: true },
   { id: 'skip',   label: 'Skip',   color: '#888888', countsAsOpen: false },
-  { id: 'review', label: 'Review', color: '#2066DF', countsAsOpen: true },
+  { id: 'later',  label: 'Later',  color: '#FF8C00', countsAsOpen: true },
 ];
 
 function makeStatuses(entries: [string, string][]): Record<string, FileStatus> {
   return Object.fromEntries(
     entries.map(([path, statusId]) => [path, { statusId, markedAt: 0 }])
   );
+}
+
+function totalFor(path: string, counts: ReturnType<typeof computeFolderCounts>): number {
+  return counts.get(path)?.segments.reduce((s, seg) => s + seg.count, 0) ?? 0;
 }
 
 describe('computeFolderCounts', () => {
@@ -23,34 +27,37 @@ describe('computeFolderCounts', () => {
   it('counts a single file in its parent folder', () => {
     const statuses = makeStatuses([['Notes/foo.md', 'unread']]);
     const counts = computeFolderCounts(statuses, CONFIGS);
-    expect(counts.get('Notes')?.total).toBe(1);
+    expect(totalFor('Notes', counts)).toBe(1);
   });
 
   it('propagates up multiple folder levels', () => {
     const statuses = makeStatuses([['a/b/c/file.md', 'unread']]);
     const counts = computeFolderCounts(statuses, CONFIGS);
-    expect(counts.get('a')?.total).toBe(1);
-    expect(counts.get('a/b')?.total).toBe(1);
-    expect(counts.get('a/b/c')?.total).toBe(1);
+    expect(totalFor('a', counts)).toBe(1);
+    expect(totalFor('a/b', counts)).toBe(1);
+    expect(totalFor('a/b/c', counts)).toBe(1);
   });
 
   it('sums multiple files across folders', () => {
     const statuses = makeStatuses([
       ['Notes/a.md', 'unread'],
-      ['Notes/b.md', 'review'],
+      ['Notes/b.md', 'later'],
     ]);
     const counts = computeFolderCounts(statuses, CONFIGS);
-    expect(counts.get('Notes')?.total).toBe(2);
+    expect(totalFor('Notes', counts)).toBe(2);
   });
 
-  it('picks dominant color from most frequent status', () => {
+  it('returns one segment per status in config order', () => {
     const statuses = makeStatuses([
-      ['Notes/a.md', 'review'],
-      ['Notes/b.md', 'review'],
+      ['Notes/a.md', 'later'],
+      ['Notes/b.md', 'later'],
       ['Notes/c.md', 'unread'],
     ]);
     const counts = computeFolderCounts(statuses, CONFIGS);
-    expect(counts.get('Notes')?.dominantColor).toBe('#2066DF'); // review color
+    const segs = counts.get('Notes')?.segments ?? [];
+    // unread comes first (config order), then later
+    expect(segs[0]).toMatchObject({ count: 1, color: '#4285F4' });
+    expect(segs[1]).toMatchObject({ count: 2, color: '#FF8C00' });
   });
 
   it('does not count root-level files (no parent folder)', () => {
@@ -65,6 +72,6 @@ describe('computeFolderCounts', () => {
       ['Notes/b.md', 'unread'],
     ]);
     const counts = computeFolderCounts(statuses, CONFIGS);
-    expect(counts.get('Notes')?.total).toBe(1);
+    expect(totalFor('Notes', counts)).toBe(1);
   });
 });
