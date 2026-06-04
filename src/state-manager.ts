@@ -52,6 +52,26 @@ export class StateManager {
     }
   }
 
+  private saveTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // Debounced write — coalesces rapid successive mutations into one disk write.
+  scheduleSave(): void {
+    if (this.saveTimer !== null) clearTimeout(this.saveTimer);
+    this.saveTimer = setTimeout(() => {
+      this.saveTimer = null;
+      this.plugin.saveData(this.data).catch(() => {});
+    }, 300);
+  }
+
+  // Flush any pending debounced write immediately (used on unload).
+  async flushSave(): Promise<void> {
+    if (this.saveTimer !== null) {
+      clearTimeout(this.saveTimer);
+      this.saveTimer = null;
+    }
+    await this.plugin.saveData(this.data);
+  }
+
   async save(): Promise<void> {
     await this.plugin.saveData(this.data);
   }

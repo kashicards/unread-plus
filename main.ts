@@ -35,7 +35,7 @@ export default class UnreadPlusPlugin extends Plugin {
     this.autoReadTimers.clear();
     this.stateManager.setKnownPaths(this.app.vault.getFiles().map(f => f.path));
     this.stateManager.setLastCloseTime(Date.now());
-    await this.stateManager.save();
+    await this.stateManager.flushSave();
   }
 
   private registerVaultEvents(): void {
@@ -66,10 +66,7 @@ export default class UnreadPlusPlugin extends Plugin {
 
   private registerWorkspaceEvents(): void {
     this.registerEvent(
-      this.app.workspace.on('layout-change', () => {
-        this.badgeRenderer.tryAttachObserver();
-        this.badgeRenderer.refresh();
-      })
+      this.app.workspace.on('layout-change', () => this.badgeRenderer.refresh())
     );
 
     this.registerEvent(
@@ -82,8 +79,6 @@ export default class UnreadPlusPlugin extends Plugin {
     const lastClose = this.stateManager.getLastCloseTime();
     const currentFiles = this.app.vault.getFiles();
 
-    console.log(`[Unread+] detectOfflineCreations: known=${known.size} lastClose=${lastClose} current=${currentFiles.length}`);
-
     const hasBaseline = known.size > 0 || lastClose > 0;
 
     if (hasBaseline) {
@@ -92,22 +87,17 @@ export default class UnreadPlusPlugin extends Plugin {
         if (this.stateManager.getStatus(file.path)) continue;
 
         const isNewPath = known.size > 0 && !known.has(file.path);
-        // Also catch files that were overwritten while Obsidian was closed
-        // (same path but mtime is after the last clean close).
         const isModifiedOffline = lastClose > 0 && file.stat.mtime > lastClose;
 
         if (isNewPath || isModifiedOffline) {
-          console.log(`[Unread+] Offline change: ${file.path} (new=${isNewPath} modified=${isModifiedOffline})`);
           this.stateManager.setStatus(file.path, 'unread');
         }
       }
-    } else {
-      console.log('[Unread+] No baseline yet — skipping offline detection');
     }
 
     if (currentFiles.length > 0) {
       this.stateManager.setKnownPaths(currentFiles.map(f => f.path));
-      this.stateManager.save();
+      this.stateManager.scheduleSave();
     }
 
     setTimeout(() => this.badgeRenderer.refresh(), 150);
@@ -118,19 +108,19 @@ export default class UnreadPlusPlugin extends Plugin {
     if (this.stateManager.isIgnored(file.path)) return;
 
     this.stateManager.setStatus(file.path, 'unread');
-    this.stateManager.save();
+    this.stateManager.scheduleSave();
     this.badgeRenderer.refresh();
   }
 
   private onFileRenamed(file: TAbstractFile, oldPath: string): void {
     this.stateManager.renamePath(oldPath, file.path);
-    this.stateManager.save();
+    this.stateManager.scheduleSave();
     this.badgeRenderer.refresh();
   }
 
   private onFileDeleted(file: TAbstractFile): void {
     this.stateManager.deletePath(file.path);
-    this.stateManager.save();
+    this.stateManager.scheduleSave();
     this.badgeRenderer.refresh();
   }
 
@@ -147,7 +137,7 @@ export default class UnreadPlusPlugin extends Plugin {
 
     const timer = setTimeout(() => {
       this.stateManager.clearStatus(file.path);
-      this.stateManager.save();
+      this.stateManager.scheduleSave();
       this.badgeRenderer.refresh();
       this.autoReadTimers.delete(file.path);
     }, seconds * 1000);
@@ -158,13 +148,13 @@ export default class UnreadPlusPlugin extends Plugin {
   // Called by context menu and commands
   setFileStatus(path: string, statusId: string): void {
     this.stateManager.setStatus(path, statusId);
-    this.stateManager.save();
+    this.stateManager.scheduleSave();
     this.badgeRenderer.refresh();
   }
 
   clearFileStatus(path: string): void {
     this.stateManager.clearStatus(path);
-    this.stateManager.save();
+    this.stateManager.scheduleSave();
     this.badgeRenderer.refresh();
   }
 
@@ -174,7 +164,7 @@ export default class UnreadPlusPlugin extends Plugin {
       name: 'Mark all as read',
       callback: () => {
         this.stateManager.clearAll();
-        this.stateManager.save();
+        this.stateManager.scheduleSave();
         this.badgeRenderer.refresh();
       },
     });
@@ -209,7 +199,7 @@ export default class UnreadPlusPlugin extends Plugin {
               this.stateManager.clearStatus(path);
             }
           }
-          this.stateManager.save();
+          this.stateManager.scheduleSave();
           this.badgeRenderer.refresh();
         }
         return true;
@@ -250,6 +240,15 @@ export default class UnreadPlusPlugin extends Plugin {
     });
   }
 
+  private makeMenuDot(color: string, char = '●'): HTMLSpanElement {
+    const span = document.createElement('span');
+    span.textContent = char + ' ';
+    span.style.color = color;
+    span.style.fontSize = '10px';
+    span.style.marginRight = '2px';
+    return span;
+  }
+
   private registerContextMenu(): void {
     this.registerEvent(
       this.app.workspace.on('file-menu', (menu, file) => {
@@ -264,14 +263,9 @@ export default class UnreadPlusPlugin extends Plugin {
           if (current?.statusId === config.id) continue;
           menu.addItem(item => {
             const frag = document.createDocumentFragment();
-            const dot = document.createElement('span');
-            dot.textContent = '● ';
-            dot.style.cssText = `color:${config.color};font-size:10px;margin-right:2px;`;
-            frag.appendChild(dot);
+            frag.appendChild(this.makeMenuDot(config.color));
             frag.appendChild(document.createTextNode(config.label));
-            item
-              .setTitle(frag)
-              .onClick(() => this.setFileStatus(file.path, config.id));
+            item.setTitle(frag).onClick(() => this.setFileStatus(file.path, config.id));
           });
         }
 
@@ -279,16 +273,9 @@ export default class UnreadPlusPlugin extends Plugin {
           const currentConfig = configs.find(c => c.id === current.statusId);
           menu.addItem(item => {
             const frag = document.createDocumentFragment();
-            if (currentConfig) {
-              const dot = document.createElement('span');
-              dot.textContent = '○ ';
-              dot.style.cssText = `color:${currentConfig.color};font-size:10px;margin-right:2px;`;
-              frag.appendChild(dot);
-            }
+            if (currentConfig) frag.appendChild(this.makeMenuDot(currentConfig.color, '○'));
             frag.appendChild(document.createTextNode('Mark as read'));
-            item
-              .setTitle(frag)
-              .onClick(() => this.clearFileStatus(file.path));
+            item.setTitle(frag).onClick(() => this.clearFileStatus(file.path));
           });
         }
       })

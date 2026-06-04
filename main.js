@@ -52,6 +52,7 @@ var StateManager = class {
   constructor(plugin) {
     this.plugin = plugin;
     this.data = structuredClone(DEFAULT_DATA);
+    this.saveTimer = null;
   }
   async load() {
     var _a, _b, _c, _d;
@@ -93,6 +94,23 @@ var StateManager = class {
       }
       this.data.version = 4;
     }
+  }
+  // Debounced write — coalesces rapid successive mutations into one disk write.
+  scheduleSave() {
+    if (this.saveTimer !== null) clearTimeout(this.saveTimer);
+    this.saveTimer = setTimeout(() => {
+      this.saveTimer = null;
+      this.plugin.saveData(this.data).catch(() => {
+      });
+    }, 300);
+  }
+  // Flush any pending debounced write immediately (used on unload).
+  async flushSave() {
+    if (this.saveTimer !== null) {
+      clearTimeout(this.saveTimer);
+      this.saveTimer = null;
+    }
+    await this.plugin.saveData(this.data);
   }
   async save() {
     await this.plugin.saveData(this.data);
@@ -220,9 +238,6 @@ var BadgeRenderer = class {
       this.attachObserver();
     });
   }
-  tryAttachObserver() {
-    if (!this.observer) this.attachObserver();
-  }
   stop() {
     var _a;
     (_a = this.observer) == null ? void 0 : _a.disconnect();
@@ -240,8 +255,11 @@ var BadgeRenderer = class {
     this.isRendering = false;
   }
   getExplorerContainer() {
+    var _a;
     const leaves = this.app.workspace.getLeavesOfType("file-explorer");
-    return leaves.length > 0 ? leaves[0].view.containerEl : null;
+    if (leaves.length === 0) return null;
+    const view = leaves[0].view;
+    return (_a = view.containerEl) != null ? _a : null;
   }
   clearAll(container) {
     const root = container != null ? container : this.getExplorerContainer();
@@ -555,7 +573,7 @@ var UnreadPlusPlugin = class extends import_obsidian3.Plugin {
     this.autoReadTimers.clear();
     this.stateManager.setKnownPaths(this.app.vault.getFiles().map((f) => f.path));
     this.stateManager.setLastCloseTime(Date.now());
-    await this.stateManager.save();
+    await this.stateManager.flushSave();
   }
   registerVaultEvents() {
     this.registerEvent(
@@ -580,10 +598,7 @@ var UnreadPlusPlugin = class extends import_obsidian3.Plugin {
   }
   registerWorkspaceEvents() {
     this.registerEvent(
-      this.app.workspace.on("layout-change", () => {
-        this.badgeRenderer.tryAttachObserver();
-        this.badgeRenderer.refresh();
-      })
+      this.app.workspace.on("layout-change", () => this.badgeRenderer.refresh())
     );
     this.registerEvent(
       this.app.workspace.on("file-open", (file) => this.onFileOpen(file))
@@ -593,7 +608,6 @@ var UnreadPlusPlugin = class extends import_obsidian3.Plugin {
     const known = this.stateManager.getKnownPaths();
     const lastClose = this.stateManager.getLastCloseTime();
     const currentFiles = this.app.vault.getFiles();
-    console.log(`[Unread+] detectOfflineCreations: known=${known.size} lastClose=${lastClose} current=${currentFiles.length}`);
     const hasBaseline = known.size > 0 || lastClose > 0;
     if (hasBaseline) {
       for (const file of currentFiles) {
@@ -602,16 +616,13 @@ var UnreadPlusPlugin = class extends import_obsidian3.Plugin {
         const isNewPath = known.size > 0 && !known.has(file.path);
         const isModifiedOffline = lastClose > 0 && file.stat.mtime > lastClose;
         if (isNewPath || isModifiedOffline) {
-          console.log(`[Unread+] Offline change: ${file.path} (new=${isNewPath} modified=${isModifiedOffline})`);
           this.stateManager.setStatus(file.path, "unread");
         }
       }
-    } else {
-      console.log("[Unread+] No baseline yet \u2014 skipping offline detection");
     }
     if (currentFiles.length > 0) {
       this.stateManager.setKnownPaths(currentFiles.map((f) => f.path));
-      this.stateManager.save();
+      this.stateManager.scheduleSave();
     }
     setTimeout(() => this.badgeRenderer.refresh(), 150);
   }
@@ -619,17 +630,17 @@ var UnreadPlusPlugin = class extends import_obsidian3.Plugin {
     if (!(file instanceof import_obsidian3.TFile)) return;
     if (this.stateManager.isIgnored(file.path)) return;
     this.stateManager.setStatus(file.path, "unread");
-    this.stateManager.save();
+    this.stateManager.scheduleSave();
     this.badgeRenderer.refresh();
   }
   onFileRenamed(file, oldPath) {
     this.stateManager.renamePath(oldPath, file.path);
-    this.stateManager.save();
+    this.stateManager.scheduleSave();
     this.badgeRenderer.refresh();
   }
   onFileDeleted(file) {
     this.stateManager.deletePath(file.path);
-    this.stateManager.save();
+    this.stateManager.scheduleSave();
     this.badgeRenderer.refresh();
   }
   onFileOpen(file) {
@@ -641,7 +652,7 @@ var UnreadPlusPlugin = class extends import_obsidian3.Plugin {
     if (!this.stateManager.hasOpenStatus(file.path)) return;
     const timer = setTimeout(() => {
       this.stateManager.clearStatus(file.path);
-      this.stateManager.save();
+      this.stateManager.scheduleSave();
       this.badgeRenderer.refresh();
       this.autoReadTimers.delete(file.path);
     }, seconds * 1e3);
@@ -650,12 +661,12 @@ var UnreadPlusPlugin = class extends import_obsidian3.Plugin {
   // Called by context menu and commands
   setFileStatus(path, statusId) {
     this.stateManager.setStatus(path, statusId);
-    this.stateManager.save();
+    this.stateManager.scheduleSave();
     this.badgeRenderer.refresh();
   }
   clearFileStatus(path) {
     this.stateManager.clearStatus(path);
-    this.stateManager.save();
+    this.stateManager.scheduleSave();
     this.badgeRenderer.refresh();
   }
   registerCommands() {
@@ -664,7 +675,7 @@ var UnreadPlusPlugin = class extends import_obsidian3.Plugin {
       name: "Mark all as read",
       callback: () => {
         this.stateManager.clearAll();
-        this.stateManager.save();
+        this.stateManager.scheduleSave();
         this.badgeRenderer.refresh();
       }
     });
@@ -696,7 +707,7 @@ var UnreadPlusPlugin = class extends import_obsidian3.Plugin {
               this.stateManager.clearStatus(path);
             }
           }
-          this.stateManager.save();
+          this.stateManager.scheduleSave();
           this.badgeRenderer.refresh();
         }
         return true;
@@ -733,6 +744,14 @@ var UnreadPlusPlugin = class extends import_obsidian3.Plugin {
       }
     });
   }
+  makeMenuDot(color, char = "\u25CF") {
+    const span = document.createElement("span");
+    span.textContent = char + " ";
+    span.style.color = color;
+    span.style.fontSize = "10px";
+    span.style.marginRight = "2px";
+    return span;
+  }
   registerContextMenu() {
     this.registerEvent(
       this.app.workspace.on("file-menu", (menu, file) => {
@@ -744,10 +763,7 @@ var UnreadPlusPlugin = class extends import_obsidian3.Plugin {
           if ((current == null ? void 0 : current.statusId) === config.id) continue;
           menu.addItem((item) => {
             const frag = document.createDocumentFragment();
-            const dot = document.createElement("span");
-            dot.textContent = "\u25CF ";
-            dot.style.cssText = `color:${config.color};font-size:10px;margin-right:2px;`;
-            frag.appendChild(dot);
+            frag.appendChild(this.makeMenuDot(config.color));
             frag.appendChild(document.createTextNode(config.label));
             item.setTitle(frag).onClick(() => this.setFileStatus(file.path, config.id));
           });
@@ -756,12 +772,7 @@ var UnreadPlusPlugin = class extends import_obsidian3.Plugin {
           const currentConfig = configs.find((c) => c.id === current.statusId);
           menu.addItem((item) => {
             const frag = document.createDocumentFragment();
-            if (currentConfig) {
-              const dot = document.createElement("span");
-              dot.textContent = "\u25CB ";
-              dot.style.cssText = `color:${currentConfig.color};font-size:10px;margin-right:2px;`;
-              frag.appendChild(dot);
-            }
+            if (currentConfig) frag.appendChild(this.makeMenuDot(currentConfig.color, "\u25CB"));
             frag.appendChild(document.createTextNode("Mark as read"));
             item.setTitle(frag).onClick(() => this.clearFileStatus(file.path));
           });

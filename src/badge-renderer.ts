@@ -15,11 +15,7 @@ export class BadgeRenderer {
     });
   }
 
-  tryAttachObserver(): void {
-    if (!this.observer) this.attachObserver();
-  }
-
-  stop(): void {
+stop(): void {
     this.observer?.disconnect();
     this.observer = null;
     this.clearAll();
@@ -39,7 +35,9 @@ export class BadgeRenderer {
 
   private getExplorerContainer(): HTMLElement | null {
     const leaves = this.app.workspace.getLeavesOfType('file-explorer');
-    return leaves.length > 0 ? (leaves[0].view as any).containerEl as HTMLElement : null;
+    if (leaves.length === 0) return null;
+    const view = leaves[0].view as { containerEl?: HTMLElement };
+    return view.containerEl ?? null;
   }
 
   private clearAll(container?: HTMLElement): void {
