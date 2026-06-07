@@ -1,4 +1,4 @@
-import { Plugin, TAbstractFile, TFile } from 'obsidian';
+import { FileView, Plugin, TAbstractFile, TFile } from 'obsidian';
 import { StateManager } from './src/state-manager';
 import { BadgeRenderer } from './src/badge-renderer';
 import { SettingsTab } from './src/settings-tab';
@@ -11,6 +11,8 @@ export default class UnreadPlusPlugin extends Plugin {
 
   private autoReadTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private isLayoutReady = false;
+  private statusBarItem!: HTMLElement;
+  private snoozeWakeupTimer: ReturnType<typeof setTimeout> | null = null;
 
   async onload(): Promise<void> {
     this.stateManager = new StateManager(this);
@@ -18,6 +20,7 @@ export default class UnreadPlusPlugin extends Plugin {
 
     this.badgeRenderer = new BadgeRenderer(this.app, this.stateManager);
     this.reviewMode = new ReviewMode();
+    this.statusBarItem = this.addStatusBarItem();
 
     this.badgeRenderer.start();
     this.registerVaultEvents();
@@ -33,9 +36,22 @@ export default class UnreadPlusPlugin extends Plugin {
     this.badgeRenderer.stop();
     this.autoReadTimers.forEach(t => clearTimeout(t));
     this.autoReadTimers.clear();
+    if (this.snoozeWakeupTimer !== null) clearTimeout(this.snoozeWakeupTimer);
     this.stateManager.setKnownPaths(this.app.vault.getFiles().map(f => f.path));
     this.stateManager.setLastCloseTime(Date.now());
+    this.stateManager.setLastOpenPaths([...this.getOpenFilePaths()]);
     await this.stateManager.flushSave();
+  }
+
+  // Paths currently visible in any leaf — files the user was actively viewing/editing.
+  private getOpenFilePaths(): Set<string> {
+    const paths = new Set<string>();
+    this.app.workspace.iterateAllLeaves(leaf => {
+      if (leaf.view instanceof FileView && leaf.view.file) {
+        paths.add(leaf.view.file.path);
+      }
+    });
+    return paths;
   }
 
   private registerVaultEvents(): void {
@@ -75,9 +91,15 @@ export default class UnreadPlusPlugin extends Plugin {
   }
 
   private detectOfflineCreations(): void {
+    this.stateManager.clearExpiredSnoozes();
     const known = this.stateManager.getKnownPaths();
     const lastClose = this.stateManager.getLastCloseTime();
+    const lastOpen = this.stateManager.getLastOpenPaths();
     const currentFiles = this.app.vault.getFiles();
+
+    // Prune readPaths to only existing files before using them
+    const currentPathSet = new Set(currentFiles.map(f => f.path));
+    this.stateManager.pruneReadPaths(currentPathSet);
 
     const hasBaseline = known.size > 0 || lastClose > 0;
 
@@ -85,9 +107,14 @@ export default class UnreadPlusPlugin extends Plugin {
       for (const file of currentFiles) {
         if (this.stateManager.isIgnored(file.path)) continue;
         if (this.stateManager.getStatus(file.path)) continue;
+        // Never re-mark files the user explicitly read — survives mtime race conditions
+        if (this.stateManager.isExplicitlyRead(file.path)) continue;
 
         const isNewPath = known.size > 0 && !known.has(file.path);
-        const isModifiedOffline = lastClose > 0 && file.stat.mtime > lastClose;
+        // Files open at last shutdown were being read/edited by the user — a trailing
+        // save flushing after lastCloseTime is captured shouldn't make them "unread".
+        const isModifiedOffline =
+          lastClose > 0 && file.stat.mtime > lastClose && !lastOpen.has(file.path);
 
         if (isNewPath || isModifiedOffline) {
           this.stateManager.setStatus(file.path, 'unread');
@@ -100,28 +127,36 @@ export default class UnreadPlusPlugin extends Plugin {
       this.stateManager.scheduleSave();
     }
 
-    setTimeout(() => this.badgeRenderer.refresh(), 150);
+    this.scheduleSnoozeWakeup();
+    setTimeout(() => this.refreshUI(), 150);
   }
 
   private onFileCreated(file: TAbstractFile): void {
     if (!(file instanceof TFile)) return;
     if (this.stateManager.isIgnored(file.path)) return;
+    if (this.app.workspace.getActiveFile()?.path === file.path) return;
 
-    this.stateManager.setStatus(file.path, 'unread');
-    this.stateManager.scheduleSave();
-    this.badgeRenderer.refresh();
+    // Obsidian commonly opens a freshly created file in a leaf shortly after
+    // emitting 'create' (e.g. "New note"), so re-check before marking unread —
+    // otherwise self-created files briefly flash as unread.
+    setTimeout(() => {
+      if (this.app.workspace.getActiveFile()?.path === file.path) return;
+      this.stateManager.setStatus(file.path, 'unread');
+      this.stateManager.scheduleSave();
+      this.refreshUI();
+    }, 150);
   }
 
   private onFileRenamed(file: TAbstractFile, oldPath: string): void {
     this.stateManager.renamePath(oldPath, file.path);
     this.stateManager.scheduleSave();
-    this.badgeRenderer.refresh();
+    this.refreshUI();
   }
 
   private onFileDeleted(file: TAbstractFile): void {
     this.stateManager.deletePath(file.path);
     this.stateManager.scheduleSave();
-    this.badgeRenderer.refresh();
+    this.refreshUI();
   }
 
   private onFileOpen(file: TFile | null): void {
@@ -138,24 +173,24 @@ export default class UnreadPlusPlugin extends Plugin {
     const timer = setTimeout(() => {
       this.stateManager.clearStatus(file.path);
       this.stateManager.scheduleSave();
-      this.badgeRenderer.refresh();
+      this.refreshUI();
       this.autoReadTimers.delete(file.path);
     }, seconds * 1000);
 
     this.autoReadTimers.set(file.path, timer);
   }
 
-  // Called by context menu and commands
+  // Called by context menu and commands — save immediately so close-timing races don't lose the change
   setFileStatus(path: string, statusId: string): void {
     this.stateManager.setStatus(path, statusId);
-    this.stateManager.scheduleSave();
-    this.badgeRenderer.refresh();
+    this.stateManager.save().catch(() => {});
+    this.refreshUI();
   }
 
   clearFileStatus(path: string): void {
     this.stateManager.clearStatus(path);
-    this.stateManager.scheduleSave();
-    this.badgeRenderer.refresh();
+    this.stateManager.save().catch(() => {});
+    this.refreshUI();
   }
 
   private registerCommands(): void {
@@ -165,7 +200,7 @@ export default class UnreadPlusPlugin extends Plugin {
       callback: () => {
         this.stateManager.clearAll();
         this.stateManager.scheduleSave();
-        this.badgeRenderer.refresh();
+        this.refreshUI();
       },
     });
 
@@ -200,7 +235,7 @@ export default class UnreadPlusPlugin extends Plugin {
             }
           }
           this.stateManager.scheduleSave();
-          this.badgeRenderer.refresh();
+          this.refreshUI();
         }
         return true;
       },
@@ -240,6 +275,41 @@ export default class UnreadPlusPlugin extends Plugin {
     });
   }
 
+  private refreshUI(): void {
+    this.badgeRenderer.refresh();
+    this.updateStatusBar();
+  }
+
+  private updateStatusBar(): void {
+    const counts = this.stateManager.getOpenCounts();
+    this.statusBarItem.empty();
+    if (counts.length === 0) {
+      this.statusBarItem.style.display = 'none';
+      return;
+    }
+    this.statusBarItem.style.display = '';
+    for (const { config, count } of counts) {
+      const span = this.statusBarItem.createSpan();
+      span.style.color = config.color;
+      span.style.marginRight = '6px';
+      span.textContent = `${count}●`;
+    }
+  }
+
+  private scheduleSnoozeWakeup(): void {
+    if (this.snoozeWakeupTimer !== null) clearTimeout(this.snoozeWakeupTimer);
+    const next = this.stateManager.nextSnoozeExpiry();
+    if (next === null) return;
+    const delay = Math.max(next - Date.now(), 0);
+    this.snoozeWakeupTimer = setTimeout(() => {
+      this.snoozeWakeupTimer = null;
+      this.stateManager.clearExpiredSnoozes();
+      this.stateManager.scheduleSave();
+      this.refreshUI();
+      this.scheduleSnoozeWakeup();
+    }, delay);
+  }
+
   private makeMenuDot(color: string, char = '●'): HTMLSpanElement {
     const span = document.createElement('span');
     span.textContent = char + ' ';
@@ -271,6 +341,33 @@ export default class UnreadPlusPlugin extends Plugin {
 
         if (current) {
           const currentConfig = configs.find(c => c.id === current.statusId);
+
+          if (this.stateManager.isSnoozed(file.path)) {
+            menu.addItem(item =>
+              item.setTitle('Unsnooze').setIcon('bell')
+                .onClick(() => {
+                  this.stateManager.clearSnooze(file.path);
+                  this.stateManager.save().catch(() => {});
+                  this.scheduleSnoozeWakeup();
+                  this.refreshUI();
+                })
+            );
+          } else {
+            menu.addSeparator();
+            for (const [label, days] of [['Snooze 1 day', 1], ['Snooze 3 days', 3], ['Snooze 1 week', 7]] as const) {
+              menu.addItem(item =>
+                item.setTitle(label).setIcon('clock')
+                  .onClick(() => {
+                    this.stateManager.snooze(file.path, days * 86_400_000);
+                    this.stateManager.save().catch(() => {});
+                    this.scheduleSnoozeWakeup();
+                    this.refreshUI();
+                  })
+              );
+            }
+          }
+
+          menu.addSeparator();
           menu.addItem(item => {
             const frag = document.createDocumentFragment();
             if (currentConfig) frag.appendChild(this.makeMenuDot(currentConfig.color, '○'));

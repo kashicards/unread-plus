@@ -57,6 +57,7 @@ stop(): void {
 
       const status = this.stateManager.getStatus(path);
       if (!status) return;
+      if (this.stateManager.isSnoozed(path)) return;
 
       const config = configMap.get(status.statusId);
       if (!config) return;
@@ -65,6 +66,11 @@ stop(): void {
       dot.className = 'unread-plus-dot';
       dot.setAttribute('data-status', status.statusId);
       dot.style.setProperty('--dot-color', config.color);
+
+      if (settings.dotAging) {
+        const ageDays = (Date.now() - status.markedAt) / 86_400_000;
+        dot.style.opacity = String(Math.max(1 - ageDays * 0.1, 0.4).toFixed(2));
+      }
 
       if (settings.badgeShowLabel) {
         dot.setAttribute('data-label', config.label);
@@ -75,10 +81,11 @@ stop(): void {
   }
 
   private renderFolderBadges(container: HTMLElement): void {
-    const folderCounts = computeFolderCounts(
-      this.stateManager.getAllFileStatuses(),
-      this.stateManager.getStatusConfigs(),
+    const allStatuses = this.stateManager.getAllFileStatuses();
+    const activeStatuses = Object.fromEntries(
+      Object.entries(allStatuses).filter(([path]) => !this.stateManager.isSnoozed(path))
     );
+    const folderCounts = computeFolderCounts(activeStatuses, this.stateManager.getStatusConfigs());
 
     container.querySelectorAll<HTMLElement>('.nav-folder-title[data-path]').forEach(titleEl => {
       const path = titleEl.getAttribute('data-path');

@@ -1,6 +1,7 @@
 export interface FileStatus {
   statusId: string;
-  markedAt: number; // Date.now() timestamp
+  markedAt: number;       // Date.now() when status was set
+  snoozedUntil?: number;  // Date.now() epoch when snooze expires; absent = not snoozed
 }
 
 export interface StatusConfig {
@@ -15,6 +16,7 @@ export interface UnreadPlusSettings {
   ignorePaths: string[];         // prefix-match, e.g. "Archive"
   ignoreExtensions: string[];    // without dot, e.g. ["pdf", "png"]
   badgeShowLabel: boolean;       // show "● unread" vs just "●"
+  dotAging: boolean;             // fade dot opacity over time
   reviewOrder: 'created' | 'folder' | 'random';
   reviewAutoMarkSeconds: number; // 0 = disabled
 }
@@ -26,6 +28,8 @@ export interface PluginData {
   settings: UnreadPlusSettings;
   knownPaths: string[];
   lastCloseTime: number; // Date.now() when Obsidian last closed cleanly
+  readPaths: string[];   // paths explicitly marked as read by the user
+  lastOpenPaths: string[]; // paths open in a leaf at last clean shutdown — exempt from offline-modification detection
 }
 
 export interface FolderCount {
@@ -42,6 +46,7 @@ export const DEFAULT_SETTINGS: UnreadPlusSettings = {
   ignorePaths: [],
   ignoreExtensions: ['json'],
   badgeShowLabel: false,
+  dotAging: true,
   reviewOrder: 'created',
   reviewAutoMarkSeconds: 0,
 };
@@ -53,4 +58,6 @@ export const DEFAULT_DATA: PluginData = {
   settings: DEFAULT_SETTINGS,
   knownPaths: [],
   lastCloseTime: 0,
+  readPaths: [],
+  lastOpenPaths: [],
 };

@@ -1,6 +1,6 @@
 # Unread+
 
-An Obsidian plugin that marks new files with a colored dot and propagates unread counts up the entire folder tree — so you never miss what's new, even in a collapsed vault.
+Track unread files in Obsidian. New files get a colored dot — folder badges propagate counts up the entire tree so you always know where to look, even in a collapsed vault.
 
 ![File explorer with dots and folder badge](docs/preview-explorer.png)
 
@@ -8,72 +8,58 @@ An Obsidian plugin that marks new files with a colored dot and propagates unread
 
 ## Features
 
-**Colored dots on files** — every new file gets a dot. Blue = Unread, Orange = Later. Colors and labels are fully customizable.
+**Colored dots** — Unread (blue) and Later (orange) by default. Fully customizable — add any status with any color.
 
-**Folder badges with per-status counts** — the count propagates up the entire folder tree. If you have 1 unread and 1 later somewhere inside a folder, you see `1● 1●` with the right colors — at any depth, even collapsed.
+**Folder badges** — each parent folder shows a per-status count (`1● 1●`) at every depth, even collapsed.
 
-**Offline detection** — files created by scripts, sync tools (iCloud, Dropbox, Obsidian Sync), or anything else while Obsidian was closed are automatically picked up on the next launch.
+**Status bar** — total unread count visible at the bottom of Obsidian at all times.
 
-**Colored context menu** — right-click any file to set or clear its status. Each option shows a colored circle so you know exactly what you're picking.
+**Dot aging** — fresh dots start at full opacity and fade slightly each day. Files you've been sitting on for a week look the part.
 
-![Right-click context menu with colored circles](docs/preview-context-menu.png)
+**Snooze** — right-click → Snooze 1 day / 3 days / 1 week. The dot disappears and comes back automatically when the time is up.
 
-**Open Next Unread** — press `Ctrl+Shift+U` (Mac: `Cmd+Shift+U`) to open all unread files one by one. Hit it again for the next. When the queue is empty you get an "All clear ✓" notice.
+**Offline detection** — files created by scripts or sync tools while Obsidian was closed are picked up automatically on the next launch.
+
+**Open Next Unread** — `Ctrl+Shift+U` opens all unread files one by one until the queue is empty.
+
+**Colored context menu** — each status shows its own colored circle. No guessing.
+
+![Right-click context menu](docs/preview-context-menu.png)
 
 ---
 
 ## Installation
 
-> Not yet in the community plugin list. Install manually:
-
 1. Download `main.js`, `manifest.json`, `styles.css` from the [latest release](../../releases/latest)
 2. Copy to `.obsidian/plugins/unread-plus/` in your vault
-3. Obsidian → Settings → Community Plugins → enable **Unread+**
+3. Settings → Community Plugins → enable **Unread+**
 
-**From source:**
 ```bash
+# From source
 git clone https://github.com/kashicards/unread-plus.git
-cd unread-plus
-npm install && npm run build
+cd unread-plus && npm install && npm run build
 ```
 
 ---
 
 ## Usage
 
-| What | How |
-|------|-----|
-| Mark a file unread or later | Right-click the file → pick status |
-| Clear a file's status | Right-click → Mark as read |
-| Open next unread file | `Ctrl+Shift+U` |
+| Action | How |
+|--------|-----|
+| Set status | Right-click file → pick status |
+| Clear status | Right-click → Mark as read |
+| Snooze | Right-click → Snooze 1 day / 3 days / 1 week |
+| Open next unread | `Ctrl+Shift+U` |
 | Mark all as read | Command palette → *Mark all as read* |
-| Mark current file as unread | Command palette → *Mark current file as unread* |
-| Clear all in current folder | Command palette → *Mark all in current folder as read* |
 
 ---
 
 ## Settings
 
-![Settings page](docs/preview-settings.png)
+![Settings](docs/preview-settings.png)
 
-**General**
-- **Auto-read delay** — auto-clear status after N seconds of the file being open (0 = off)
-- **Show label in badge** — show `Unread ●` instead of just `●`
-
-**Ignore**
-- **Ignored paths** — folder prefixes never tracked (e.g. `Templates`, `Archive`)
-- **Ignored extensions** — file types to skip (default: `json`)
-
-**Statuses**
-- Add, rename, recolor statuses freely
-- **Counts as open** — whether this status shows up in folder badges and the `Ctrl+Shift+U` queue
-
-**Queue (Ctrl+Shift+U)**
-- Order: oldest first / by folder / random
-- Auto-mark as read after N seconds in queue (0 = off)
-
----
-
-## How offline detection works
-
-On startup, the plugin compares the current vault against a snapshot from the last session. Any file that is new or was modified after Obsidian last closed gets marked unread automatically. This covers scripts, sync tools, and anything else that writes to your vault while Obsidian is closed.
+- **Auto-read delay** — auto-clear status after N seconds of the file being open
+- **Show label in badge** — display `Unread ●` instead of just `●`
+- **Ignored paths / extensions** — never track certain folders or file types (`json` excluded by default)
+- **Statuses** — add, rename, recolor; "Counts as open" controls folder badges and queue inclusion
+- **Queue** — order and auto-mark behavior for `Ctrl+Shift+U`

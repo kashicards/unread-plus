@@ -46,6 +46,19 @@ export class SettingsTab extends PluginSettingTab {
             this.plugin.badgeRenderer.refresh();
           });
       });
+
+    new Setting(el)
+      .setName('Dot aging')
+      .setDesc('Dots start at full opacity and fade slightly each day. Keeps old unread files visually subtle.')
+      .addToggle(toggle => {
+        toggle
+          .setValue(this.plugin.stateManager.getSettings().dotAging)
+          .onChange(async value => {
+            this.plugin.stateManager.updateSettings({ dotAging: value });
+            await this.plugin.stateManager.save();
+            this.plugin.badgeRenderer.refresh();
+          });
+      });
   }
 
   private renderIgnoreSection(el: HTMLElement): void {

@@ -19,6 +19,8 @@ export class StateManager {
       fileStatuses: saved.fileStatuses ?? {},
       knownPaths: saved.knownPaths ?? [],
       lastCloseTime: saved.lastCloseTime ?? 0,
+      readPaths: saved.readPaths ?? [],
+      lastOpenPaths: saved.lastOpenPaths ?? [],
     };
     this.migrate();
   }
@@ -80,10 +82,24 @@ export class StateManager {
 
   setStatus(path: string, statusId: string): void {
     this.data.fileStatuses[path] = { statusId, markedAt: Date.now() };
+    // Remove from readPaths when explicitly re-marked
+    const idx = this.data.readPaths.indexOf(path);
+    if (idx !== -1) this.data.readPaths.splice(idx, 1);
   }
 
   clearStatus(path: string): void {
     delete this.data.fileStatuses[path];
+    // Track as explicitly read so detectOfflineCreations never re-marks it
+    if (!this.data.readPaths.includes(path)) this.data.readPaths.push(path);
+  }
+
+  isExplicitlyRead(path: string): boolean {
+    return this.data.readPaths.includes(path);
+  }
+
+  // Remove paths that no longer exist in the vault (called on startup)
+  pruneReadPaths(validPaths: Set<string>): void {
+    this.data.readPaths = this.data.readPaths.filter(p => validPaths.has(p));
   }
 
   getStatus(path: string): FileStatus | undefined {
@@ -95,18 +111,33 @@ export class StateManager {
   }
 
   hasOpenStatus(path: string): boolean {
+    if (this.isSnoozed(path)) return false;
     const status = this.getStatus(path);
     if (!status) return false;
     return this.getStatusConfig(status.statusId)?.countsAsOpen ?? false;
   }
 
   renamePath(oldPath: string, newPath: string): void {
-    const entries = Object.entries(this.data.fileStatuses);
-    for (const [path, status] of entries) {
+    // fileStatuses
+    for (const [path, status] of Object.entries(this.data.fileStatuses)) {
       if (path === oldPath || path.startsWith(oldPath + '/')) {
         const updated = newPath + path.slice(oldPath.length);
         delete this.data.fileStatuses[path];
         this.data.fileStatuses[updated] = status;
+      }
+    }
+    // knownPaths — keep in sync so detectOfflineCreations doesn't see the new path as "new"
+    for (let i = 0; i < this.data.knownPaths.length; i++) {
+      const p = this.data.knownPaths[i];
+      if (p === oldPath || p.startsWith(oldPath + '/')) {
+        this.data.knownPaths[i] = newPath + p.slice(oldPath.length);
+      }
+    }
+    // readPaths
+    for (let i = 0; i < this.data.readPaths.length; i++) {
+      const p = this.data.readPaths[i];
+      if (p === oldPath || p.startsWith(oldPath + '/')) {
+        this.data.readPaths[i] = newPath + p.slice(oldPath.length);
       }
     }
   }
@@ -117,10 +148,70 @@ export class StateManager {
         delete this.data.fileStatuses[key];
       }
     }
+    this.data.readPaths = this.data.readPaths.filter(
+      p => p !== path && !p.startsWith(path + '/')
+    );
   }
 
   clearAll(): void {
     this.data.fileStatuses = {};
+  }
+
+  // --- Snooze ---
+
+  snooze(path: string, durationMs: number): void {
+    const status = this.data.fileStatuses[path];
+    if (status) {
+      this.data.fileStatuses[path] = { ...status, snoozedUntil: Date.now() + durationMs };
+    }
+  }
+
+  clearSnooze(path: string): void {
+    const status = this.data.fileStatuses[path];
+    if (status) {
+      const { snoozedUntil: _, ...rest } = status;
+      this.data.fileStatuses[path] = rest as FileStatus;
+    }
+  }
+
+  isSnoozed(path: string): boolean {
+    const s = this.data.fileStatuses[path];
+    return !!s?.snoozedUntil && s.snoozedUntil > Date.now();
+  }
+
+  clearExpiredSnoozes(): void {
+    const now = Date.now();
+    for (const [path, status] of Object.entries(this.data.fileStatuses)) {
+      if (status.snoozedUntil && status.snoozedUntil <= now) {
+        const { snoozedUntil: _, ...rest } = status;
+        this.data.fileStatuses[path] = rest as FileStatus;
+      }
+    }
+  }
+
+  nextSnoozeExpiry(): number | null {
+    const now = Date.now();
+    let earliest: number | null = null;
+    for (const status of Object.values(this.data.fileStatuses)) {
+      if (status.snoozedUntil && status.snoozedUntil > now) {
+        if (earliest === null || status.snoozedUntil < earliest) earliest = status.snoozedUntil;
+      }
+    }
+    return earliest;
+  }
+
+  // Returns per-status counts for all non-snoozed open files (used by status bar).
+  getOpenCounts(): Array<{ config: StatusConfig; count: number }> {
+    const now = Date.now();
+    const counts = new Map<string, number>();
+    for (const status of Object.values(this.data.fileStatuses)) {
+      if (status.snoozedUntil && status.snoozedUntil > now) continue;
+      if (!this.getStatusConfig(status.statusId)?.countsAsOpen) continue;
+      counts.set(status.statusId, (counts.get(status.statusId) ?? 0) + 1);
+    }
+    return this.data.statusConfigs
+      .filter(c => c.countsAsOpen && counts.has(c.id))
+      .map(c => ({ config: c, count: counts.get(c.id)! }));
   }
 
   // --- Offline-creation snapshot ---
@@ -139,6 +230,14 @@ export class StateManager {
 
   setLastCloseTime(ts: number): void {
     this.data.lastCloseTime = ts;
+  }
+
+  getLastOpenPaths(): Set<string> {
+    return new Set(this.data.lastOpenPaths);
+  }
+
+  setLastOpenPaths(paths: string[]): void {
+    this.data.lastOpenPaths = paths;
   }
 
   // --- Status configs ---
