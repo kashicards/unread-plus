@@ -154,6 +154,9 @@ export class StateManager {
   }
 
   clearAll(): void {
+    for (const path of Object.keys(this.data.fileStatuses)) {
+      if (!this.data.readPaths.includes(path)) this.data.readPaths.push(path);
+    }
     this.data.fileStatuses = {};
   }
 

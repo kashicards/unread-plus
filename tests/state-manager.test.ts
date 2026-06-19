@@ -33,6 +33,20 @@ describe('StateManager', () => {
     expect(sm.getStatus('notes/foo.md')).toBeUndefined();
   });
 
+  it('clearStatus marks the path as explicitly read', () => {
+    sm.setStatus('notes/foo.md', 'unread');
+    sm.clearStatus('notes/foo.md');
+    expect(sm.isExplicitlyRead('notes/foo.md')).toBe(true);
+  });
+
+  it('clearAll marks every cleared path as explicitly read', () => {
+    sm.setStatus('notes/foo.md', 'unread');
+    sm.setStatus('notes/bar.md', 'unread');
+    sm.clearAll();
+    expect(sm.isExplicitlyRead('notes/foo.md')).toBe(true);
+    expect(sm.isExplicitlyRead('notes/bar.md')).toBe(true);
+  });
+
   it('hasOpenStatus returns true for countsAsOpen status', () => {
     sm.setStatus('notes/foo.md', 'unread');
     expect(sm.hasOpenStatus('notes/foo.md')).toBe(true);
