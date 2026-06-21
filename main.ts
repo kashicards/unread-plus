@@ -10,6 +10,7 @@ export default class UnreadPlusPlugin extends Plugin {
   reviewMode!: ReviewMode;
 
   private autoReadTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private recentlyRenamedPaths = new Set<string>();
   private isLayoutReady = false;
   private statusBarItem!: HTMLElement;
   private snoozeWakeupTimer: ReturnType<typeof setTimeout> | null = null;
@@ -134,18 +135,20 @@ export default class UnreadPlusPlugin extends Plugin {
   private onFileCreated(file: TAbstractFile): void {
     if (!(file instanceof TFile)) return;
     if (this.stateManager.isIgnored(file.path)) return;
-    if (this.app.workspace.getActiveFile()?.path === file.path) return;
+    if (this.getOpenFilePaths().has(file.path)) return;
     // Obsidian re-emits 'create' for pre-existing files while it finishes indexing
     // a vault after startup (the isLayoutReady gate doesn't cover this). Without this
     // check, a file the user explicitly marked read would flip back to unread on reopen.
     if (this.stateManager.isExplicitlyRead(file.path)) return;
+    if (this.recentlyRenamedPaths.has(file.path)) return;
 
     // Obsidian commonly opens a freshly created file in a leaf shortly after
     // emitting 'create' (e.g. "New note"), so re-check before marking unread —
     // otherwise self-created files briefly flash as unread.
     setTimeout(() => {
-      if (this.app.workspace.getActiveFile()?.path === file.path) return;
+      if (this.getOpenFilePaths().has(file.path)) return;
       if (this.stateManager.isExplicitlyRead(file.path)) return;
+      if (this.recentlyRenamedPaths.has(file.path)) return;
       this.stateManager.setStatus(file.path, 'unread');
       this.stateManager.scheduleSave();
       this.refreshUI();
@@ -154,7 +157,11 @@ export default class UnreadPlusPlugin extends Plugin {
 
   private onFileRenamed(file: TAbstractFile, oldPath: string): void {
     this.stateManager.renamePath(oldPath, file.path);
-    this.stateManager.scheduleSave();
+    // Track new path briefly so a spurious 'create' event for the move target
+    // doesn't re-mark the file as unread (user-initiated move ≠ new content).
+    this.recentlyRenamedPaths.add(file.path);
+    setTimeout(() => this.recentlyRenamedPaths.delete(file.path), 1000);
+    this.stateManager.save().catch(() => {});
     this.refreshUI();
   }
 

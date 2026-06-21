@@ -669,6 +669,7 @@ var UnreadPlusPlugin = class extends import_obsidian4.Plugin {
   constructor() {
     super(...arguments);
     this.autoReadTimers = /* @__PURE__ */ new Map();
+    this.recentlyRenamedPaths = /* @__PURE__ */ new Set();
     this.isLayoutReady = false;
     this.snoozeWakeupTimer = null;
   }
@@ -769,10 +770,12 @@ var UnreadPlusPlugin = class extends import_obsidian4.Plugin {
     if (this.stateManager.isIgnored(file.path)) return;
     if (((_a = this.app.workspace.getActiveFile()) == null ? void 0 : _a.path) === file.path) return;
     if (this.stateManager.isExplicitlyRead(file.path)) return;
+    if (this.recentlyRenamedPaths.has(file.path)) return;
     setTimeout(() => {
       var _a2;
       if (((_a2 = this.app.workspace.getActiveFile()) == null ? void 0 : _a2.path) === file.path) return;
       if (this.stateManager.isExplicitlyRead(file.path)) return;
+      if (this.recentlyRenamedPaths.has(file.path)) return;
       this.stateManager.setStatus(file.path, "unread");
       this.stateManager.scheduleSave();
       this.refreshUI();
@@ -780,7 +783,10 @@ var UnreadPlusPlugin = class extends import_obsidian4.Plugin {
   }
   onFileRenamed(file, oldPath) {
     this.stateManager.renamePath(oldPath, file.path);
-    this.stateManager.scheduleSave();
+    this.recentlyRenamedPaths.add(file.path);
+    setTimeout(() => this.recentlyRenamedPaths.delete(file.path), 1e3);
+    this.stateManager.save().catch(() => {
+    });
     this.refreshUI();
   }
   onFileDeleted(file) {
