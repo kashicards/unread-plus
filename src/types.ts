@@ -1,7 +1,7 @@
 export interface FileStatus {
   statusId: string;
-  markedAt: number;       // Date.now() when status was set
-  snoozedUntil?: number;  // Date.now() epoch when snooze expires; absent = not snoozed
+  markedAt: number;
+  snoozedUntil?: number;
 }
 
 export interface StatusConfig {
@@ -12,13 +12,13 @@ export interface StatusConfig {
 }
 
 export interface UnreadPlusSettings {
-  autoReadSeconds: number;       // 0 = disabled
-  ignorePaths: string[];         // prefix-match, e.g. "Archive"
-  ignoreExtensions: string[];    // without dot, e.g. ["pdf", "png"]
-  badgeShowLabel: boolean;       // show "● unread" vs just "●"
-  dotAging: boolean;             // fade dot opacity over time
+  autoReadSeconds: number;
+  ignorePaths: string[];
+  ignoreExtensions: string[];
+  badgeShowLabel: boolean;
+  dotAging: boolean;
   reviewOrder: 'created' | 'folder' | 'random';
-  reviewAutoMarkSeconds: number; // 0 = disabled
+  reviewAutoMarkSeconds: number;
 }
 
 export interface PluginData {
@@ -26,10 +26,11 @@ export interface PluginData {
   fileStatuses: Record<string, FileStatus>;
   statusConfigs: StatusConfig[];
   settings: UnreadPlusSettings;
-  knownPaths: string[];
-  lastCloseTime: number; // Date.now() when Obsidian last closed cleanly
-  readPaths: string[];   // paths explicitly marked as read by the user
-  lastOpenPaths: string[]; // paths open in a leaf at last clean shutdown — exempt from offline-modification detection
+  knownPaths: string[];      // vault snapshot at last shutdown
+  lastCloseTime: number;     // Date.now() at last clean shutdown
+  readPaths: string[];       // explicitly marked read by the user
+  lastOpenPaths: string[];   // open in a leaf at last shutdown — exempt from offline-modification check
+  movedPaths: string[];      // renamed/moved paths this session — consumed at next startup
 }
 
 export interface FolderCount {
@@ -60,4 +61,5 @@ export const DEFAULT_DATA: PluginData = {
   lastCloseTime: 0,
   readPaths: [],
   lastOpenPaths: [],
+  movedPaths: [],
 };

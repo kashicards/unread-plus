@@ -5,7 +5,7 @@
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
-    "build": "tsc --noEmit --skipLibCheck && node esbuild.config.mjs production",
+    "build": "tsc --noEmit --skipLibCheck && node esbuild.config.mjs production && copy main.js \"C:\\Users\\lucys\\Documents\\_workspace\\ObsidianVault\\.obsidian\\plugins\\unread-plus\\main.js\"",
     "test": "vitest run",
     "test:watch": "vitest"
   },

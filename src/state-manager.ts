@@ -21,25 +21,23 @@ export class StateManager {
       lastCloseTime: saved.lastCloseTime ?? 0,
       readPaths: saved.readPaths ?? [],
       lastOpenPaths: saved.lastOpenPaths ?? [],
+      movedPaths: saved.movedPaths ?? [],
     };
     this.migrate();
   }
 
   private migrate(): void {
-    // v1 → v2: change default unread orange to blue
     if ((this.data.version ?? 1) < 2) {
       const unread = this.data.statusConfigs.find(s => s.id === 'unread');
       if (unread && unread.color === '#FA6300') unread.color = '#4285F4';
       this.data.version = 2;
     }
-    // v2 → v3: add json to ignoreExtensions
     if (this.data.version < 3) {
       if (!this.data.settings.ignoreExtensions.includes('json')) {
         this.data.settings.ignoreExtensions.push('json');
       }
       this.data.version = 3;
     }
-    // v3 → v4: replace skip+review presets with "later" (orange); fix queue filter
     if (this.data.version < 4) {
       const ids = this.data.statusConfigs.map(s => s.id);
       if (ids.includes('skip') || ids.includes('review')) {
@@ -56,7 +54,6 @@ export class StateManager {
 
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
 
-  // Debounced write — coalesces rapid successive mutations into one disk write.
   scheduleSave(): void {
     if (this.saveTimer !== null) clearTimeout(this.saveTimer);
     this.saveTimer = setTimeout(() => {
@@ -65,7 +62,6 @@ export class StateManager {
     }, 300);
   }
 
-  // Flush any pending debounced write immediately (used on unload).
   async flushSave(): Promise<void> {
     if (this.saveTimer !== null) {
       clearTimeout(this.saveTimer);
@@ -82,14 +78,12 @@ export class StateManager {
 
   setStatus(path: string, statusId: string): void {
     this.data.fileStatuses[path] = { statusId, markedAt: Date.now() };
-    // Remove from readPaths when explicitly re-marked
     const idx = this.data.readPaths.indexOf(path);
     if (idx !== -1) this.data.readPaths.splice(idx, 1);
   }
 
   clearStatus(path: string): void {
     delete this.data.fileStatuses[path];
-    // Track as explicitly read so detectOfflineCreations never re-marks it
     if (!this.data.readPaths.includes(path)) this.data.readPaths.push(path);
   }
 
@@ -97,7 +91,6 @@ export class StateManager {
     return this.data.readPaths.includes(path);
   }
 
-  // Remove paths that no longer exist in the vault (called on startup)
   pruneReadPaths(validPaths: Set<string>): void {
     this.data.readPaths = this.data.readPaths.filter(p => validPaths.has(p));
   }
@@ -118,26 +111,40 @@ export class StateManager {
   }
 
   renamePath(oldPath: string, newPath: string): void {
-    // fileStatuses
+    const gotStatus = new Set<string>();
     for (const [path, status] of Object.entries(this.data.fileStatuses)) {
       if (path === oldPath || path.startsWith(oldPath + '/')) {
         const updated = newPath + path.slice(oldPath.length);
         delete this.data.fileStatuses[path];
         this.data.fileStatuses[updated] = status;
+        gotStatus.add(updated);
       }
     }
-    // knownPaths — keep in sync so detectOfflineCreations doesn't see the new path as "new"
+
+    const wasKnown = new Set<string>();
     for (let i = 0; i < this.data.knownPaths.length; i++) {
       const p = this.data.knownPaths[i];
       if (p === oldPath || p.startsWith(oldPath + '/')) {
-        this.data.knownPaths[i] = newPath + p.slice(oldPath.length);
+        const updated = newPath + p.slice(oldPath.length);
+        this.data.knownPaths[i] = updated;
+        wasKnown.add(updated);
       }
     }
-    // readPaths
+
+    const wasRead = new Set<string>();
     for (let i = 0; i < this.data.readPaths.length; i++) {
       const p = this.data.readPaths[i];
       if (p === oldPath || p.startsWith(oldPath + '/')) {
-        this.data.readPaths[i] = newPath + p.slice(oldPath.length);
+        const updated = newPath + p.slice(oldPath.length);
+        this.data.readPaths[i] = updated;
+        wasRead.add(updated);
+      }
+    }
+
+    // A clean moved file must not appear as new/modified on next startup.
+    for (const p of wasKnown) {
+      if (!gotStatus.has(p) && !wasRead.has(p) && !this.data.readPaths.includes(p)) {
+        this.data.readPaths.push(p);
       }
     }
   }
@@ -203,7 +210,6 @@ export class StateManager {
     return earliest;
   }
 
-  // Returns per-status counts for all non-snoozed open files (used by status bar).
   getOpenCounts(): Array<{ config: StatusConfig; count: number }> {
     const now = Date.now();
     const counts = new Map<string, number>();
@@ -241,6 +247,19 @@ export class StateManager {
 
   setLastOpenPaths(paths: string[]): void {
     this.data.lastOpenPaths = paths;
+  }
+
+  // --- Moved paths ---
+
+  addMovedPath(newPath: string): void {
+    if (!this.data.movedPaths) this.data.movedPaths = [];
+    if (!this.data.movedPaths.includes(newPath)) this.data.movedPaths.push(newPath);
+  }
+
+  popMovedPaths(): string[] {
+    const paths = this.data.movedPaths ?? [];
+    this.data.movedPaths = [];
+    return paths;
   }
 
   // --- Status configs ---

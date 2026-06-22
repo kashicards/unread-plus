@@ -11,6 +11,7 @@ export default class UnreadPlusPlugin extends Plugin {
 
   private autoReadTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private recentlyRenamedPaths = new Set<string>();
+  private sessionOpenedPaths = new Set<string>();
   private isLayoutReady = false;
   private statusBarItem!: HTMLElement;
   private snoozeWakeupTimer: ReturnType<typeof setTimeout> | null = null;
@@ -40,11 +41,13 @@ export default class UnreadPlusPlugin extends Plugin {
     if (this.snoozeWakeupTimer !== null) clearTimeout(this.snoozeWakeupTimer);
     this.stateManager.setKnownPaths(this.app.vault.getFiles().map(f => f.path));
     this.stateManager.setLastCloseTime(Date.now());
-    this.stateManager.setLastOpenPaths([...this.getOpenFilePaths()]);
+    this.stateManager.setLastOpenPaths([
+      ...this.getOpenFilePaths(),
+      ...this.sessionOpenedPaths,
+    ]);
     await this.stateManager.flushSave();
   }
 
-  // Paths currently visible in any leaf — files the user was actively viewing/editing.
   private getOpenFilePaths(): Set<string> {
     const paths = new Set<string>();
     this.app.workspace.iterateAllLeaves(leaf => {
@@ -56,8 +59,6 @@ export default class UnreadPlusPlugin extends Plugin {
   }
 
   private registerVaultEvents(): void {
-    // Register immediately so external file creations (e.g. from scripts) are not missed.
-    // isLayoutReady guards against marking the entire vault on initial load.
     this.registerEvent(
       this.app.vault.on('create', (file: TAbstractFile) => {
         if (!this.isLayoutReady) return;
@@ -67,6 +68,8 @@ export default class UnreadPlusPlugin extends Plugin {
 
     this.app.workspace.onLayoutReady(() => {
       this.isLayoutReady = true;
+      // Capture files already open at startup in case file-open fired before our listener registered.
+      for (const path of this.getOpenFilePaths()) this.sessionOpenedPaths.add(path);
       this.detectOfflineCreations();
     });
 
@@ -85,7 +88,6 @@ export default class UnreadPlusPlugin extends Plugin {
     this.registerEvent(
       this.app.workspace.on('layout-change', () => this.badgeRenderer.refresh())
     );
-
     this.registerEvent(
       this.app.workspace.on('file-open', (file: TFile | null) => this.onFileOpen(file))
     );
@@ -98,9 +100,11 @@ export default class UnreadPlusPlugin extends Plugin {
     const lastOpen = this.stateManager.getLastOpenPaths();
     const currentFiles = this.app.vault.getFiles();
 
-    // Prune readPaths to only existing files before using them
-    const currentPathSet = new Set(currentFiles.map(f => f.path));
-    this.stateManager.pruneReadPaths(currentPathSet);
+    const moved = this.stateManager.popMovedPaths();
+    const isRecentlyMoved = (path: string) =>
+      moved.some(p => path === p || path.startsWith(p + '/'));
+
+    this.stateManager.pruneReadPaths(new Set(currentFiles.map(f => f.path)));
 
     const hasBaseline = known.size > 0 || lastClose > 0;
 
@@ -108,12 +112,12 @@ export default class UnreadPlusPlugin extends Plugin {
       for (const file of currentFiles) {
         if (this.stateManager.isIgnored(file.path)) continue;
         if (this.stateManager.getStatus(file.path)) continue;
-        // Never re-mark files the user explicitly read — survives mtime race conditions
         if (this.stateManager.isExplicitlyRead(file.path)) continue;
+        if (isRecentlyMoved(file.path)) continue;
 
-        const isNewPath = known.size > 0 && !known.has(file.path);
-        // Files open at last shutdown were being read/edited by the user — a trailing
-        // save flushing after lastCloseTime is captured shouldn't make them "unread".
+        const isNewPath =
+          known.size > 0 && !known.has(file.path) &&
+          lastClose > 0 && file.stat.mtime > lastClose;
         const isModifiedOffline =
           lastClose > 0 && file.stat.mtime > lastClose && !lastOpen.has(file.path);
 
@@ -136,19 +140,21 @@ export default class UnreadPlusPlugin extends Plugin {
     if (!(file instanceof TFile)) return;
     if (this.stateManager.isIgnored(file.path)) return;
     if (this.getOpenFilePaths().has(file.path)) return;
-    // Obsidian re-emits 'create' for pre-existing files while it finishes indexing
-    // a vault after startup (the isLayoutReady gate doesn't cover this). Without this
-    // check, a file the user explicitly marked read would flip back to unread on reopen.
     if (this.stateManager.isExplicitlyRead(file.path)) return;
-    if (this.recentlyRenamedPaths.has(file.path)) return;
+    if (this.isUnderRecentlyRenamedPath(file.path)) return;
+    // Obsidian fires a second wave of 'create' events for pre-existing files after
+    // onLayoutReady (continued vault indexing). By that point detectOfflineCreations
+    // has already called setKnownPaths, so any file that existed at last shutdown is
+    // in knownPaths — treat those creates as spurious and skip them.
+    if (this.stateManager.getKnownPaths().has(file.path)) return;
 
-    // Obsidian commonly opens a freshly created file in a leaf shortly after
-    // emitting 'create' (e.g. "New note"), so re-check before marking unread —
-    // otherwise self-created files briefly flash as unread.
+    // Obsidian opens freshly created notes in a leaf shortly after emitting 'create',
+    // so re-check after a tick to avoid briefly flashing user-created notes as unread.
     setTimeout(() => {
       if (this.getOpenFilePaths().has(file.path)) return;
       if (this.stateManager.isExplicitlyRead(file.path)) return;
-      if (this.recentlyRenamedPaths.has(file.path)) return;
+      if (this.isUnderRecentlyRenamedPath(file.path)) return;
+      if (this.stateManager.getKnownPaths().has(file.path)) return;
       this.stateManager.setStatus(file.path, 'unread');
       this.stateManager.scheduleSave();
       this.refreshUI();
@@ -156,13 +162,36 @@ export default class UnreadPlusPlugin extends Plugin {
   }
 
   private onFileRenamed(file: TAbstractFile, oldPath: string): void {
+    for (const p of [...this.sessionOpenedPaths]) {
+      if (p === oldPath || p.startsWith(oldPath + '/')) {
+        this.sessionOpenedPaths.delete(p);
+        this.sessionOpenedPaths.add(file.path + p.slice(oldPath.length));
+      }
+    }
+
+    const hadStatusBefore = this.stateManager.getStatus(oldPath);
     this.stateManager.renamePath(oldPath, file.path);
-    // Track new path briefly so a spurious 'create' event for the move target
-    // doesn't re-mark the file as unread (user-initiated move ≠ new content).
+
+    // Undo any status that a spurious create-before-rename race may have applied.
+    if (!hadStatusBefore) {
+      const newStatus = this.stateManager.getStatus(file.path);
+      if (newStatus) this.stateManager.clearStatus(file.path);
+    }
+
+    this.stateManager.addMovedPath(file.path);
+
+    // Briefly suppress spurious creates that may arrive after this rename.
     this.recentlyRenamedPaths.add(file.path);
     setTimeout(() => this.recentlyRenamedPaths.delete(file.path), 1000);
     this.stateManager.save().catch(() => {});
     this.refreshUI();
+  }
+
+  private isUnderRecentlyRenamedPath(filePath: string): boolean {
+    for (const p of this.recentlyRenamedPaths) {
+      if (filePath === p || filePath.startsWith(p + '/')) return true;
+    }
+    return false;
   }
 
   private onFileDeleted(file: TAbstractFile): void {
@@ -173,8 +202,8 @@ export default class UnreadPlusPlugin extends Plugin {
 
   private onFileOpen(file: TFile | null): void {
     if (!file) return;
+    this.sessionOpenedPaths.add(file.path);
 
-    // Cancel any existing timer for this file
     const existing = this.autoReadTimers.get(file.path);
     if (existing) clearTimeout(existing);
 
@@ -192,7 +221,6 @@ export default class UnreadPlusPlugin extends Plugin {
     this.autoReadTimers.set(file.path, timer);
   }
 
-  // Called by context menu and commands — save immediately so close-timing races don't lose the change
   setFileStatus(path: string, statusId: string): void {
     this.stateManager.setStatus(path, statusId);
     this.stateManager.save().catch(() => {});
@@ -222,9 +250,7 @@ export default class UnreadPlusPlugin extends Plugin {
       checkCallback: (checking: boolean) => {
         const file = this.app.workspace.getActiveFile();
         if (!file) return false;
-        if (!checking) {
-          this.setFileStatus(file.path, 'unread');
-        }
+        if (!checking) this.setFileStatus(file.path, 'unread');
         return true;
       },
     });
@@ -237,14 +263,9 @@ export default class UnreadPlusPlugin extends Plugin {
         if (!file) return false;
         if (!checking) {
           const folder = file.parent?.path ?? '';
-          const statuses = this.stateManager.getAllFileStatuses();
-          for (const path of Object.keys(statuses)) {
-            const inFolder = folder === ''
-              ? !path.includes('/')
-              : path.startsWith(folder + '/');
-            if (inFolder) {
-              this.stateManager.clearStatus(path);
-            }
+          for (const path of Object.keys(this.stateManager.getAllFileStatuses())) {
+            const inFolder = folder === '' ? !path.includes('/') : path.startsWith(folder + '/');
+            if (inFolder) this.stateManager.clearStatus(path);
           }
           this.stateManager.save().catch(() => {});
           this.refreshUI();
@@ -258,9 +279,7 @@ export default class UnreadPlusPlugin extends Plugin {
       name: 'Open next unread',
       hotkeys: [{ modifiers: ['Mod', 'Shift'], key: 'U' }],
       callback: () => {
-        if (!this.reviewMode.isActive()) {
-          this.reviewMode.start(this.stateManager);
-        }
+        if (!this.reviewMode.isActive()) this.reviewMode.start(this.stateManager);
         this.reviewMode.next(this.app, this.stateManager, this);
       },
     });
@@ -279,9 +298,7 @@ export default class UnreadPlusPlugin extends Plugin {
       name: 'Next in review',
       checkCallback: (checking: boolean) => {
         if (!this.reviewMode.isActive()) return false;
-        if (!checking) {
-          this.reviewMode.next(this.app, this.stateManager, this);
-        }
+        if (!checking) this.reviewMode.next(this.app, this.stateManager, this);
         return true;
       },
     });

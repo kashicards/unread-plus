@@ -47,7 +47,8 @@ var DEFAULT_DATA = {
   knownPaths: [],
   lastCloseTime: 0,
   readPaths: [],
-  lastOpenPaths: []
+  lastOpenPaths: [],
+  movedPaths: []
 };
 
 // src/state-manager.ts
@@ -58,7 +59,7 @@ var StateManager = class {
     this.saveTimer = null;
   }
   async load() {
-    var _a, _b, _c, _d, _e, _f;
+    var _a, _b, _c, _d, _e, _f, _g;
     const saved = await this.plugin.loadData();
     if (!saved) return;
     this.data = {
@@ -70,7 +71,8 @@ var StateManager = class {
       knownPaths: (_c = saved.knownPaths) != null ? _c : [],
       lastCloseTime: (_d = saved.lastCloseTime) != null ? _d : 0,
       readPaths: (_e = saved.readPaths) != null ? _e : [],
-      lastOpenPaths: (_f = saved.lastOpenPaths) != null ? _f : []
+      lastOpenPaths: (_f = saved.lastOpenPaths) != null ? _f : [],
+      movedPaths: (_g = saved.movedPaths) != null ? _g : []
     };
     this.migrate();
   }
@@ -100,7 +102,6 @@ var StateManager = class {
       this.data.version = 4;
     }
   }
-  // Debounced write — coalesces rapid successive mutations into one disk write.
   scheduleSave() {
     if (this.saveTimer !== null) clearTimeout(this.saveTimer);
     this.saveTimer = setTimeout(() => {
@@ -109,7 +110,6 @@ var StateManager = class {
       });
     }, 300);
   }
-  // Flush any pending debounced write immediately (used on unload).
   async flushSave() {
     if (this.saveTimer !== null) {
       clearTimeout(this.saveTimer);
@@ -133,7 +133,6 @@ var StateManager = class {
   isExplicitlyRead(path) {
     return this.data.readPaths.includes(path);
   }
-  // Remove paths that no longer exist in the vault (called on startup)
   pruneReadPaths(validPaths) {
     this.data.readPaths = this.data.readPaths.filter((p) => validPaths.has(p));
   }
@@ -151,23 +150,36 @@ var StateManager = class {
     return (_b = (_a = this.getStatusConfig(status.statusId)) == null ? void 0 : _a.countsAsOpen) != null ? _b : false;
   }
   renamePath(oldPath, newPath) {
+    const gotStatus = /* @__PURE__ */ new Set();
     for (const [path, status] of Object.entries(this.data.fileStatuses)) {
       if (path === oldPath || path.startsWith(oldPath + "/")) {
         const updated = newPath + path.slice(oldPath.length);
         delete this.data.fileStatuses[path];
         this.data.fileStatuses[updated] = status;
+        gotStatus.add(updated);
       }
     }
+    const wasKnown = /* @__PURE__ */ new Set();
     for (let i = 0; i < this.data.knownPaths.length; i++) {
       const p = this.data.knownPaths[i];
       if (p === oldPath || p.startsWith(oldPath + "/")) {
-        this.data.knownPaths[i] = newPath + p.slice(oldPath.length);
+        const updated = newPath + p.slice(oldPath.length);
+        this.data.knownPaths[i] = updated;
+        wasKnown.add(updated);
       }
     }
+    const wasRead = /* @__PURE__ */ new Set();
     for (let i = 0; i < this.data.readPaths.length; i++) {
       const p = this.data.readPaths[i];
       if (p === oldPath || p.startsWith(oldPath + "/")) {
-        this.data.readPaths[i] = newPath + p.slice(oldPath.length);
+        const updated = newPath + p.slice(oldPath.length);
+        this.data.readPaths[i] = updated;
+        wasRead.add(updated);
+      }
+    }
+    for (const p of wasKnown) {
+      if (!gotStatus.has(p) && !wasRead.has(p) && !this.data.readPaths.includes(p)) {
+        this.data.readPaths.push(p);
       }
     }
   }
@@ -224,7 +236,6 @@ var StateManager = class {
     }
     return earliest;
   }
-  // Returns per-status counts for all non-snoozed open files (used by status bar).
   getOpenCounts() {
     var _a, _b;
     const now = Date.now();
@@ -254,6 +265,17 @@ var StateManager = class {
   }
   setLastOpenPaths(paths) {
     this.data.lastOpenPaths = paths;
+  }
+  // --- Moved paths ---
+  addMovedPath(newPath) {
+    if (!this.data.movedPaths) this.data.movedPaths = [];
+    if (!this.data.movedPaths.includes(newPath)) this.data.movedPaths.push(newPath);
+  }
+  popMovedPaths() {
+    var _a;
+    const paths = (_a = this.data.movedPaths) != null ? _a : [];
+    this.data.movedPaths = [];
+    return paths;
   }
   // --- Status configs ---
   getStatusConfigs() {
@@ -670,6 +692,7 @@ var UnreadPlusPlugin = class extends import_obsidian4.Plugin {
     super(...arguments);
     this.autoReadTimers = /* @__PURE__ */ new Map();
     this.recentlyRenamedPaths = /* @__PURE__ */ new Set();
+    this.sessionOpenedPaths = /* @__PURE__ */ new Set();
     this.isLayoutReady = false;
     this.snoozeWakeupTimer = null;
   }
@@ -694,10 +717,12 @@ var UnreadPlusPlugin = class extends import_obsidian4.Plugin {
     if (this.snoozeWakeupTimer !== null) clearTimeout(this.snoozeWakeupTimer);
     this.stateManager.setKnownPaths(this.app.vault.getFiles().map((f) => f.path));
     this.stateManager.setLastCloseTime(Date.now());
-    this.stateManager.setLastOpenPaths([...this.getOpenFilePaths()]);
+    this.stateManager.setLastOpenPaths([
+      ...this.getOpenFilePaths(),
+      ...this.sessionOpenedPaths
+    ]);
     await this.stateManager.flushSave();
   }
-  // Paths currently visible in any leaf — files the user was actively viewing/editing.
   getOpenFilePaths() {
     const paths = /* @__PURE__ */ new Set();
     this.app.workspace.iterateAllLeaves((leaf) => {
@@ -716,6 +741,7 @@ var UnreadPlusPlugin = class extends import_obsidian4.Plugin {
     );
     this.app.workspace.onLayoutReady(() => {
       this.isLayoutReady = true;
+      for (const path of this.getOpenFilePaths()) this.sessionOpenedPaths.add(path);
       this.detectOfflineCreations();
     });
     this.registerEvent(
@@ -742,15 +768,17 @@ var UnreadPlusPlugin = class extends import_obsidian4.Plugin {
     const lastClose = this.stateManager.getLastCloseTime();
     const lastOpen = this.stateManager.getLastOpenPaths();
     const currentFiles = this.app.vault.getFiles();
-    const currentPathSet = new Set(currentFiles.map((f) => f.path));
-    this.stateManager.pruneReadPaths(currentPathSet);
+    const moved = this.stateManager.popMovedPaths();
+    const isRecentlyMoved = (path) => moved.some((p) => path === p || path.startsWith(p + "/"));
+    this.stateManager.pruneReadPaths(new Set(currentFiles.map((f) => f.path)));
     const hasBaseline = known.size > 0 || lastClose > 0;
     if (hasBaseline) {
       for (const file of currentFiles) {
         if (this.stateManager.isIgnored(file.path)) continue;
         if (this.stateManager.getStatus(file.path)) continue;
         if (this.stateManager.isExplicitlyRead(file.path)) continue;
-        const isNewPath = known.size > 0 && !known.has(file.path);
+        if (isRecentlyMoved(file.path)) continue;
+        const isNewPath = known.size > 0 && !known.has(file.path) && lastClose > 0 && file.stat.mtime > lastClose;
         const isModifiedOffline = lastClose > 0 && file.stat.mtime > lastClose && !lastOpen.has(file.path);
         if (isNewPath || isModifiedOffline) {
           this.stateManager.setStatus(file.path, "unread");
@@ -765,29 +793,47 @@ var UnreadPlusPlugin = class extends import_obsidian4.Plugin {
     setTimeout(() => this.refreshUI(), 150);
   }
   onFileCreated(file) {
-    var _a;
     if (!(file instanceof import_obsidian4.TFile)) return;
     if (this.stateManager.isIgnored(file.path)) return;
-    if (((_a = this.app.workspace.getActiveFile()) == null ? void 0 : _a.path) === file.path) return;
+    if (this.getOpenFilePaths().has(file.path)) return;
     if (this.stateManager.isExplicitlyRead(file.path)) return;
-    if (this.recentlyRenamedPaths.has(file.path)) return;
+    if (this.isUnderRecentlyRenamedPath(file.path)) return;
+    if (this.stateManager.getKnownPaths().has(file.path)) return;
     setTimeout(() => {
-      var _a2;
-      if (((_a2 = this.app.workspace.getActiveFile()) == null ? void 0 : _a2.path) === file.path) return;
+      if (this.getOpenFilePaths().has(file.path)) return;
       if (this.stateManager.isExplicitlyRead(file.path)) return;
-      if (this.recentlyRenamedPaths.has(file.path)) return;
+      if (this.isUnderRecentlyRenamedPath(file.path)) return;
+      if (this.stateManager.getKnownPaths().has(file.path)) return;
       this.stateManager.setStatus(file.path, "unread");
       this.stateManager.scheduleSave();
       this.refreshUI();
     }, 150);
   }
   onFileRenamed(file, oldPath) {
+    for (const p of [...this.sessionOpenedPaths]) {
+      if (p === oldPath || p.startsWith(oldPath + "/")) {
+        this.sessionOpenedPaths.delete(p);
+        this.sessionOpenedPaths.add(file.path + p.slice(oldPath.length));
+      }
+    }
+    const hadStatusBefore = this.stateManager.getStatus(oldPath);
     this.stateManager.renamePath(oldPath, file.path);
+    if (!hadStatusBefore) {
+      const newStatus = this.stateManager.getStatus(file.path);
+      if (newStatus) this.stateManager.clearStatus(file.path);
+    }
+    this.stateManager.addMovedPath(file.path);
     this.recentlyRenamedPaths.add(file.path);
     setTimeout(() => this.recentlyRenamedPaths.delete(file.path), 1e3);
     this.stateManager.save().catch(() => {
     });
     this.refreshUI();
+  }
+  isUnderRecentlyRenamedPath(filePath) {
+    for (const p of this.recentlyRenamedPaths) {
+      if (filePath === p || filePath.startsWith(p + "/")) return true;
+    }
+    return false;
   }
   onFileDeleted(file) {
     this.stateManager.deletePath(file.path);
@@ -796,6 +842,7 @@ var UnreadPlusPlugin = class extends import_obsidian4.Plugin {
   }
   onFileOpen(file) {
     if (!file) return;
+    this.sessionOpenedPaths.add(file.path);
     const existing = this.autoReadTimers.get(file.path);
     if (existing) clearTimeout(existing);
     const seconds = this.stateManager.getSettings().autoReadSeconds;
@@ -809,7 +856,6 @@ var UnreadPlusPlugin = class extends import_obsidian4.Plugin {
     }, seconds * 1e3);
     this.autoReadTimers.set(file.path, timer);
   }
-  // Called by context menu and commands — save immediately so close-timing races don't lose the change
   setFileStatus(path, statusId) {
     this.stateManager.setStatus(path, statusId);
     this.stateManager.save().catch(() => {
@@ -839,9 +885,7 @@ var UnreadPlusPlugin = class extends import_obsidian4.Plugin {
       checkCallback: (checking) => {
         const file = this.app.workspace.getActiveFile();
         if (!file) return false;
-        if (!checking) {
-          this.setFileStatus(file.path, "unread");
-        }
+        if (!checking) this.setFileStatus(file.path, "unread");
         return true;
       }
     });
@@ -854,12 +898,9 @@ var UnreadPlusPlugin = class extends import_obsidian4.Plugin {
         if (!file) return false;
         if (!checking) {
           const folder = (_b = (_a = file.parent) == null ? void 0 : _a.path) != null ? _b : "";
-          const statuses = this.stateManager.getAllFileStatuses();
-          for (const path of Object.keys(statuses)) {
+          for (const path of Object.keys(this.stateManager.getAllFileStatuses())) {
             const inFolder = folder === "" ? !path.includes("/") : path.startsWith(folder + "/");
-            if (inFolder) {
-              this.stateManager.clearStatus(path);
-            }
+            if (inFolder) this.stateManager.clearStatus(path);
           }
           this.stateManager.save().catch(() => {
           });
@@ -873,9 +914,7 @@ var UnreadPlusPlugin = class extends import_obsidian4.Plugin {
       name: "Open next unread",
       hotkeys: [{ modifiers: ["Mod", "Shift"], key: "U" }],
       callback: () => {
-        if (!this.reviewMode.isActive()) {
-          this.reviewMode.start(this.stateManager);
-        }
+        if (!this.reviewMode.isActive()) this.reviewMode.start(this.stateManager);
         this.reviewMode.next(this.app, this.stateManager, this);
       }
     });
@@ -892,9 +931,7 @@ var UnreadPlusPlugin = class extends import_obsidian4.Plugin {
       name: "Next in review",
       checkCallback: (checking) => {
         if (!this.reviewMode.isActive()) return false;
-        if (!checking) {
-          this.reviewMode.next(this.app, this.stateManager, this);
-        }
+        if (!checking) this.reviewMode.next(this.app, this.stateManager, this);
         return true;
       }
     });
