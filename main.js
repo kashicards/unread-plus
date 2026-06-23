@@ -103,8 +103,8 @@ var StateManager = class {
     }
   }
   scheduleSave() {
-    if (this.saveTimer !== null) clearTimeout(this.saveTimer);
-    this.saveTimer = setTimeout(() => {
+    if (this.saveTimer !== null) window.clearTimeout(this.saveTimer);
+    this.saveTimer = window.setTimeout(() => {
       this.saveTimer = null;
       this.plugin.saveData(this.data).catch(() => {
       });
@@ -112,7 +112,7 @@ var StateManager = class {
   }
   async flushSave() {
     if (this.saveTimer !== null) {
-      clearTimeout(this.saveTimer);
+      window.clearTimeout(this.saveTimer);
       this.saveTimer = null;
     }
     await this.plugin.saveData(this.data);
@@ -209,8 +209,7 @@ var StateManager = class {
   clearSnooze(path) {
     const status = this.data.fileStatuses[path];
     if (status) {
-      const { snoozedUntil: _, ...rest } = status;
-      this.data.fileStatuses[path] = rest;
+      delete status.snoozedUntil;
     }
   }
   isSnoozed(path) {
@@ -219,10 +218,9 @@ var StateManager = class {
   }
   clearExpiredSnoozes() {
     const now = Date.now();
-    for (const [path, status] of Object.entries(this.data.fileStatuses)) {
+    for (const status of Object.values(this.data.fileStatuses)) {
       if (status.snoozedUntil && status.snoozedUntil <= now) {
-        const { snoozedUntil: _, ...rest } = status;
-        this.data.fileStatuses[path] = rest;
+        delete status.snoozedUntil;
       }
     }
   }
@@ -388,7 +386,7 @@ var BadgeRenderer = class {
       if (this.stateManager.isSnoozed(path)) return;
       const config = configMap.get(status.statusId);
       if (!config) return;
-      const dot = document.createElement("span");
+      const dot = activeDocument.createElement("span");
       dot.className = "unread-plus-dot";
       dot.setAttribute("data-status", status.statusId);
       dot.style.setProperty("--dot-color", config.color);
@@ -415,10 +413,10 @@ var BadgeRenderer = class {
       if (!path) return;
       const count = folderCounts.get(path);
       if (!count || count.segments.length === 0) return;
-      const badge = document.createElement("span");
+      const badge = activeDocument.createElement("span");
       badge.className = "unread-plus-folder-badge";
       for (const seg of count.segments) {
-        const span = document.createElement("span");
+        const span = activeDocument.createElement("span");
         span.textContent = `${seg.count}\u25CF`;
         span.style.color = seg.color;
         badge.appendChild(span);
@@ -433,12 +431,16 @@ var BadgeRenderer = class {
     this.observer = new MutationObserver((mutations) => {
       if (this.isRendering) return;
       const isOwnChange = mutations.every((m) => {
-        const isOwnNode = (n) => n instanceof Element && (n.classList.contains("unread-plus-dot") || n.classList.contains("unread-plus-folder-badge"));
+        const isOwnNode = (n) => {
+          if (n.nodeType !== 1) return false;
+          const el = n;
+          return el.classList.contains("unread-plus-dot") || el.classList.contains("unread-plus-folder-badge");
+        };
         return Array.from(m.addedNodes).every(isOwnNode) && Array.from(m.removedNodes).every(isOwnNode);
       });
       if (isOwnChange) return;
-      if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => this.refresh(), 50);
+      if (debounceTimer) window.clearTimeout(debounceTimer);
+      debounceTimer = window.setTimeout(() => this.refresh(), 50);
     });
     this.observer.observe(container, { childList: true, subtree: true });
   }
@@ -460,7 +462,7 @@ var SettingsTab = class extends import_obsidian.PluginSettingTab {
     this.renderReviewSection(containerEl);
   }
   renderGeneralSection(el) {
-    el.createEl("h2", { text: "General" });
+    new import_obsidian.Setting(el).setName("General").setHeading();
     new import_obsidian.Setting(el).setName("Auto-read delay (seconds)").setDesc("Mark a file as read after it has been open this many seconds. Set 0 to disable.").addText((text) => {
       text.setValue(String(this.plugin.stateManager.getSettings().autoReadSeconds)).onChange(async (value) => {
         const n = parseInt(value, 10);
@@ -486,7 +488,7 @@ var SettingsTab = class extends import_obsidian.PluginSettingTab {
     });
   }
   renderIgnoreSection(el) {
-    el.createEl("h2", { text: "Ignore" });
+    new import_obsidian.Setting(el).setName("Ignore").setHeading();
     new import_obsidian.Setting(el).setName("Ignored paths").setDesc('One path prefix per line (e.g. "Templates" or "Archive/old"). Files under these paths are never marked unread.').addTextArea((text) => {
       text.setValue(this.plugin.stateManager.getSettings().ignorePaths.join("\n")).onChange(async (value) => {
         const paths = value.split("\n").map((s) => s.trim()).filter(Boolean);
@@ -494,7 +496,7 @@ var SettingsTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.stateManager.save();
       });
       text.inputEl.rows = 4;
-      text.inputEl.style.width = "100%";
+      text.inputEl.setCssStyles({ width: "100%" });
     });
     new import_obsidian.Setting(el).setName("Ignored extensions").setDesc('Comma-separated list without dots (e.g. "pdf, png, jpg").').addText((text) => {
       text.setValue(this.plugin.stateManager.getSettings().ignoreExtensions.join(", ")).onChange(async (value) => {
@@ -505,7 +507,7 @@ var SettingsTab = class extends import_obsidian.PluginSettingTab {
     });
   }
   renderStatusSection(el) {
-    el.createEl("h2", { text: "Statuses" });
+    new import_obsidian.Setting(el).setName("Statuses").setHeading();
     el.createEl("p", {
       text: 'Each status can be applied via right-click. Statuses marked "Counts as open" appear in folder badges.',
       cls: "setting-item-description"
@@ -535,46 +537,50 @@ var SettingsTab = class extends import_obsidian.PluginSettingTab {
       const row = listEl.createDiv({ cls: "unread-plus-status-row" });
       const colorInput = row.createEl("input", { type: "color" });
       colorInput.value = config.color;
-      colorInput.addEventListener("change", async () => {
+      colorInput.addEventListener("change", () => {
         configs[i] = { ...configs[i], color: colorInput.value };
         this.plugin.stateManager.updateStatusConfigs([...configs]);
-        await this.plugin.stateManager.save();
+        this.plugin.stateManager.save().catch(() => {
+        });
         this.plugin.badgeRenderer.refresh();
       });
       const labelInput = row.createEl("input", { type: "text" });
       labelInput.value = config.label;
       labelInput.placeholder = "Label";
-      labelInput.addEventListener("change", async () => {
+      labelInput.addEventListener("change", () => {
         configs[i] = { ...configs[i], label: labelInput.value };
         this.plugin.stateManager.updateStatusConfigs([...configs]);
-        await this.plugin.stateManager.save();
+        this.plugin.stateManager.save().catch(() => {
+        });
       });
       const toggleLabel = row.createEl("label", { cls: "unread-plus-toggle-label" });
       const toggleInput = toggleLabel.createEl("input", { type: "checkbox" });
       toggleInput.checked = config.countsAsOpen;
       toggleLabel.createSpan({ text: " Counts as open" });
-      toggleInput.addEventListener("change", async () => {
+      toggleInput.addEventListener("change", () => {
         configs[i] = { ...configs[i], countsAsOpen: toggleInput.checked };
         this.plugin.stateManager.updateStatusConfigs([...configs]);
-        await this.plugin.stateManager.save();
+        this.plugin.stateManager.save().catch(() => {
+        });
         this.plugin.badgeRenderer.refresh();
       });
       const deleteBtn = row.createEl("button", { text: "\u2715" });
-      deleteBtn.addEventListener("click", async () => {
+      deleteBtn.addEventListener("click", () => {
         if (configs.length <= 1) {
           new import_obsidian.Notice("At least one status is required.");
           return;
         }
         configs.splice(i, 1);
         this.plugin.stateManager.updateStatusConfigs([...configs]);
-        await this.plugin.stateManager.save();
+        this.plugin.stateManager.save().catch(() => {
+        });
         listEl.empty();
         this.renderStatusList(listEl);
       });
     }
   }
   renderReviewSection(el) {
-    el.createEl("h2", { text: "Queue (Ctrl+Shift+U)" });
+    new import_obsidian.Setting(el).setName("Queue (Ctrl+Shift+U)").setHeading();
     el.createEl("p", {
       text: 'Opens all files with a status (Unread, Later, \u2026) one by one. "Counts as open" on each status controls which ones appear here.',
       cls: "setting-item-description"
@@ -652,8 +658,8 @@ var ReviewMode = class {
       await app.workspace.getLeaf(false).openFile(file);
       const seconds = stateManager.getSettings().reviewAutoMarkSeconds;
       if (seconds > 0) {
-        if (this.autoMarkTimer !== null) clearTimeout(this.autoMarkTimer);
-        this.autoMarkTimer = setTimeout(() => {
+        if (this.autoMarkTimer !== null) window.clearTimeout(this.autoMarkTimer);
+        this.autoMarkTimer = window.setTimeout(() => {
           plugin.clearFileStatus(path);
           this.autoMarkTimer = null;
         }, seconds * 1e3);
@@ -663,7 +669,7 @@ var ReviewMode = class {
   }
   stop() {
     if (this.autoMarkTimer !== null) {
-      clearTimeout(this.autoMarkTimer);
+      window.clearTimeout(this.autoMarkTimer);
       this.autoMarkTimer = null;
     }
     this.active = false;
@@ -695,19 +701,19 @@ var UnreadPlusPlugin = class extends import_obsidian3.Plugin {
     this.registerContextMenu();
     this.addSettingTab(new SettingsTab(this.app, this));
   }
-  async onunload() {
+  onunload() {
     this.reviewMode.stop();
     this.badgeRenderer.stop();
-    this.autoReadTimers.forEach((t) => clearTimeout(t));
+    this.autoReadTimers.forEach((t) => window.clearTimeout(t));
     this.autoReadTimers.clear();
-    if (this.snoozeWakeupTimer !== null) clearTimeout(this.snoozeWakeupTimer);
+    if (this.snoozeWakeupTimer !== null) window.clearTimeout(this.snoozeWakeupTimer);
     this.stateManager.setKnownPaths(this.app.vault.getFiles().map((f) => f.path));
     this.stateManager.setLastCloseTime(Date.now());
     this.stateManager.setLastOpenPaths([
       ...this.getOpenFilePaths(),
       ...this.sessionOpenedPaths
     ]);
-    await this.stateManager.flushSave();
+    void this.stateManager.flushSave();
   }
   getOpenFilePaths() {
     const paths = /* @__PURE__ */ new Set();
@@ -776,7 +782,7 @@ var UnreadPlusPlugin = class extends import_obsidian3.Plugin {
       this.stateManager.scheduleSave();
     }
     this.scheduleSnoozeWakeup();
-    setTimeout(() => this.refreshUI(), 150);
+    window.setTimeout(() => this.refreshUI(), 150);
   }
   onFileCreated(file) {
     if (!(file instanceof import_obsidian3.TFile)) return;
@@ -785,7 +791,7 @@ var UnreadPlusPlugin = class extends import_obsidian3.Plugin {
     if (this.stateManager.isExplicitlyRead(file.path)) return;
     if (this.isUnderRecentlyRenamedPath(file.path)) return;
     if (this.stateManager.getKnownPaths().has(file.path)) return;
-    setTimeout(() => {
+    window.setTimeout(() => {
       if (this.getOpenFilePaths().has(file.path)) return;
       if (this.stateManager.isExplicitlyRead(file.path)) return;
       if (this.isUnderRecentlyRenamedPath(file.path)) return;
@@ -810,7 +816,7 @@ var UnreadPlusPlugin = class extends import_obsidian3.Plugin {
     }
     this.stateManager.addMovedPath(file.path);
     this.recentlyRenamedPaths.add(file.path);
-    setTimeout(() => this.recentlyRenamedPaths.delete(file.path), 1e3);
+    window.setTimeout(() => this.recentlyRenamedPaths.delete(file.path), 1e3);
     this.stateManager.save().catch(() => {
     });
     this.refreshUI();
@@ -830,11 +836,11 @@ var UnreadPlusPlugin = class extends import_obsidian3.Plugin {
     if (!file) return;
     this.sessionOpenedPaths.add(file.path);
     const existing = this.autoReadTimers.get(file.path);
-    if (existing) clearTimeout(existing);
+    if (existing) window.clearTimeout(existing);
     const seconds = this.stateManager.getSettings().autoReadSeconds;
     if (seconds <= 0) return;
     if (!this.stateManager.hasOpenStatus(file.path)) return;
-    const timer = setTimeout(() => {
+    const timer = window.setTimeout(() => {
       this.stateManager.clearStatus(file.path);
       this.stateManager.scheduleSave();
       this.refreshUI();
@@ -898,10 +904,9 @@ var UnreadPlusPlugin = class extends import_obsidian3.Plugin {
     this.addCommand({
       id: "open-next-unread",
       name: "Open next unread",
-      hotkeys: [{ modifiers: ["Mod", "Shift"], key: "U" }],
       callback: () => {
         if (!this.reviewMode.isActive()) this.reviewMode.start(this.stateManager);
-        this.reviewMode.next(this.app, this.stateManager, this);
+        void this.reviewMode.next(this.app, this.stateManager, this);
       }
     });
     this.addCommand({
@@ -909,7 +914,7 @@ var UnreadPlusPlugin = class extends import_obsidian3.Plugin {
       name: "Restart queue from beginning",
       callback: () => {
         this.reviewMode.start(this.stateManager);
-        this.reviewMode.next(this.app, this.stateManager, this);
+        void this.reviewMode.next(this.app, this.stateManager, this);
       }
     });
     this.addCommand({
@@ -917,7 +922,7 @@ var UnreadPlusPlugin = class extends import_obsidian3.Plugin {
       name: "Next in review",
       checkCallback: (checking) => {
         if (!this.reviewMode.isActive()) return false;
-        if (!checking) this.reviewMode.next(this.app, this.stateManager, this);
+        if (!checking) void this.reviewMode.next(this.app, this.stateManager, this);
         return true;
       }
     });
@@ -930,23 +935,22 @@ var UnreadPlusPlugin = class extends import_obsidian3.Plugin {
     const counts = this.stateManager.getOpenCounts();
     this.statusBarItem.empty();
     if (counts.length === 0) {
-      this.statusBarItem.style.display = "none";
+      this.statusBarItem.addClass("unread-plus-hidden");
       return;
     }
-    this.statusBarItem.style.display = "";
+    this.statusBarItem.removeClass("unread-plus-hidden");
     for (const { config, count } of counts) {
-      const span = this.statusBarItem.createSpan();
-      span.style.color = config.color;
-      span.style.marginRight = "6px";
+      const span = this.statusBarItem.createSpan({ cls: "unread-plus-status-bar-dot" });
+      span.setCssStyles({ color: config.color });
       span.textContent = `${count}\u25CF`;
     }
   }
   scheduleSnoozeWakeup() {
-    if (this.snoozeWakeupTimer !== null) clearTimeout(this.snoozeWakeupTimer);
+    if (this.snoozeWakeupTimer !== null) window.clearTimeout(this.snoozeWakeupTimer);
     const next = this.stateManager.nextSnoozeExpiry();
     if (next === null) return;
     const delay = Math.max(next - Date.now(), 0);
-    this.snoozeWakeupTimer = setTimeout(() => {
+    this.snoozeWakeupTimer = window.setTimeout(() => {
       this.snoozeWakeupTimer = null;
       this.stateManager.clearExpiredSnoozes();
       this.stateManager.scheduleSave();
@@ -955,11 +959,9 @@ var UnreadPlusPlugin = class extends import_obsidian3.Plugin {
     }, delay);
   }
   makeMenuDot(color, char = "\u25CF") {
-    const span = document.createElement("span");
+    const span = activeDocument.createElement("span");
     span.textContent = char + " ";
-    span.style.color = color;
-    span.style.fontSize = "10px";
-    span.style.marginRight = "2px";
+    span.setCssStyles({ color, fontSize: "10px", marginRight: "2px" });
     return span;
   }
   registerContextMenu() {
@@ -972,9 +974,9 @@ var UnreadPlusPlugin = class extends import_obsidian3.Plugin {
         for (const config of configs) {
           if ((current == null ? void 0 : current.statusId) === config.id) continue;
           menu.addItem((item) => {
-            const frag = document.createDocumentFragment();
+            const frag = activeDocument.createDocumentFragment();
             frag.appendChild(this.makeMenuDot(config.color));
-            frag.appendChild(document.createTextNode(config.label));
+            frag.appendChild(activeDocument.createTextNode(config.label));
             item.setTitle(frag).onClick(() => this.setFileStatus(file.path, config.id));
           });
         }
@@ -1006,9 +1008,9 @@ var UnreadPlusPlugin = class extends import_obsidian3.Plugin {
           }
           menu.addSeparator();
           menu.addItem((item) => {
-            const frag = document.createDocumentFragment();
+            const frag = activeDocument.createDocumentFragment();
             if (currentConfig) frag.appendChild(this.makeMenuDot(currentConfig.color, "\u25CB"));
-            frag.appendChild(document.createTextNode("Mark as read"));
+            frag.appendChild(activeDocument.createTextNode("Mark as read"));
             item.setTitle(frag).onClick(() => this.clearFileStatus(file.path));
           });
         }
