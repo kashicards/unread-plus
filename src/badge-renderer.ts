@@ -1,4 +1,4 @@
-import { App, FileView } from 'obsidian';
+import { App } from 'obsidian';
 import { StateManager } from './state-manager';
 import { computeFolderCounts } from './folder-counter';
 
@@ -27,10 +27,9 @@ stop(): void {
     if (!container) return;
 
     this.isRendering = true;
-    const openPaths = this.getOpenFilePaths();
     this.clearAll(container);
-    this.renderFileDots(container, openPaths);
-    this.renderFolderBadges(container, openPaths);
+    this.renderFileDots(container);
+    this.renderFolderBadges(container);
     this.isRendering = false;
   }
 
@@ -47,17 +46,7 @@ stop(): void {
     root.querySelectorAll('.unread-plus-dot, .unread-plus-folder-badge').forEach(el => el.remove());
   }
 
-  private getOpenFilePaths(): Set<string> {
-    const paths = new Set<string>();
-    this.app.workspace.iterateAllLeaves(leaf => {
-      if (leaf.view instanceof FileView && leaf.view.file) {
-        paths.add(leaf.view.file.path);
-      }
-    });
-    return paths;
-  }
-
-  private renderFileDots(container: HTMLElement, openPaths: Set<string>): void {
+  private renderFileDots(container: HTMLElement): void {
     const configs = this.stateManager.getStatusConfigs();
     const configMap = new Map(configs.map(c => [c.id, c]));
     const settings = this.stateManager.getSettings();
@@ -69,7 +58,6 @@ stop(): void {
       const status = this.stateManager.getStatus(path);
       if (!status) return;
       if (this.stateManager.isSnoozed(path)) return;
-      if (openPaths.has(path)) return;
 
       const config = configMap.get(status.statusId);
       if (!config) return;
@@ -92,11 +80,11 @@ stop(): void {
     });
   }
 
-  private renderFolderBadges(container: HTMLElement, openPaths: Set<string>): void {
+  private renderFolderBadges(container: HTMLElement): void {
     const allStatuses = this.stateManager.getAllFileStatuses();
     const activeStatuses = Object.fromEntries(
       Object.entries(allStatuses).filter(([path]) =>
-        !this.stateManager.isSnoozed(path) && !openPaths.has(path)
+        !this.stateManager.isSnoozed(path)
       )
     );
     const folderCounts = computeFolderCounts(activeStatuses, this.stateManager.getStatusConfigs());
