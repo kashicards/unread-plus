@@ -462,7 +462,6 @@ var SettingsTab = class extends import_obsidian.PluginSettingTab {
     this.renderReviewSection(containerEl);
   }
   renderGeneralSection(el) {
-    new import_obsidian.Setting(el).setName("General").setHeading();
     new import_obsidian.Setting(el).setName("Auto-read delay (seconds)").setDesc("Mark a file as read after it has been open this many seconds. Set 0 to disable.").addText((text) => {
       text.setValue(String(this.plugin.stateManager.getSettings().autoReadSeconds)).onChange(async (value) => {
         const n = parseInt(value, 10);
