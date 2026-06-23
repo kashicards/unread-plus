@@ -9,12 +9,12 @@ export default class UnreadPlusPlugin extends Plugin {
   badgeRenderer!: BadgeRenderer;
   reviewMode!: ReviewMode;
 
-  private autoReadTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private autoReadTimers = new Map<string, number>();
   private recentlyRenamedPaths = new Set<string>();
   private sessionOpenedPaths = new Set<string>();
   private isLayoutReady = false;
   private statusBarItem!: HTMLElement;
-  private snoozeWakeupTimer: ReturnType<typeof setTimeout> | null = null;
+  private snoozeWakeupTimer: number | null = null;
 
   async onload(): Promise<void> {
     this.stateManager = new StateManager(this);
@@ -33,19 +33,19 @@ export default class UnreadPlusPlugin extends Plugin {
     this.addSettingTab(new SettingsTab(this.app, this));
   }
 
-  async onunload(): Promise<void> {
+  onunload(): void {
     this.reviewMode.stop();
     this.badgeRenderer.stop();
-    this.autoReadTimers.forEach(t => clearTimeout(t));
+    this.autoReadTimers.forEach(t => window.clearTimeout(t));
     this.autoReadTimers.clear();
-    if (this.snoozeWakeupTimer !== null) clearTimeout(this.snoozeWakeupTimer);
+    if (this.snoozeWakeupTimer !== null) window.clearTimeout(this.snoozeWakeupTimer);
     this.stateManager.setKnownPaths(this.app.vault.getFiles().map(f => f.path));
     this.stateManager.setLastCloseTime(Date.now());
     this.stateManager.setLastOpenPaths([
       ...this.getOpenFilePaths(),
       ...this.sessionOpenedPaths,
     ]);
-    await this.stateManager.flushSave();
+    void this.stateManager.flushSave();
   }
 
   private getOpenFilePaths(): Set<string> {
@@ -133,7 +133,7 @@ export default class UnreadPlusPlugin extends Plugin {
     }
 
     this.scheduleSnoozeWakeup();
-    setTimeout(() => this.refreshUI(), 150);
+    window.setTimeout(() => this.refreshUI(), 150);
   }
 
   private onFileCreated(file: TAbstractFile): void {
@@ -150,7 +150,7 @@ export default class UnreadPlusPlugin extends Plugin {
 
     // Obsidian opens freshly created notes in a leaf shortly after emitting 'create',
     // so re-check after a tick to avoid briefly flashing user-created notes as unread.
-    setTimeout(() => {
+    window.setTimeout(() => {
       if (this.getOpenFilePaths().has(file.path)) return;
       if (this.stateManager.isExplicitlyRead(file.path)) return;
       if (this.isUnderRecentlyRenamedPath(file.path)) return;
@@ -182,7 +182,7 @@ export default class UnreadPlusPlugin extends Plugin {
 
     // Briefly suppress spurious creates that may arrive after this rename.
     this.recentlyRenamedPaths.add(file.path);
-    setTimeout(() => this.recentlyRenamedPaths.delete(file.path), 1000);
+    window.setTimeout(() => this.recentlyRenamedPaths.delete(file.path), 1000);
     this.stateManager.save().catch(() => {});
     this.refreshUI();
   }
@@ -205,13 +205,13 @@ export default class UnreadPlusPlugin extends Plugin {
     this.sessionOpenedPaths.add(file.path);
 
     const existing = this.autoReadTimers.get(file.path);
-    if (existing) clearTimeout(existing);
+    if (existing) window.clearTimeout(existing);
 
     const seconds = this.stateManager.getSettings().autoReadSeconds;
     if (seconds <= 0) return;
     if (!this.stateManager.hasOpenStatus(file.path)) return;
 
-    const timer = setTimeout(() => {
+    const timer = window.setTimeout(() => {
       this.stateManager.clearStatus(file.path);
       this.stateManager.scheduleSave();
       this.refreshUI();
@@ -277,10 +277,9 @@ export default class UnreadPlusPlugin extends Plugin {
     this.addCommand({
       id: 'open-next-unread',
       name: 'Open next unread',
-      hotkeys: [{ modifiers: ['Mod', 'Shift'], key: 'U' }],
       callback: () => {
         if (!this.reviewMode.isActive()) this.reviewMode.start(this.stateManager);
-        this.reviewMode.next(this.app, this.stateManager, this);
+        void this.reviewMode.next(this.app, this.stateManager, this);
       },
     });
 
@@ -289,7 +288,7 @@ export default class UnreadPlusPlugin extends Plugin {
       name: 'Restart queue from beginning',
       callback: () => {
         this.reviewMode.start(this.stateManager);
-        this.reviewMode.next(this.app, this.stateManager, this);
+        void this.reviewMode.next(this.app, this.stateManager, this);
       },
     });
 
@@ -298,7 +297,7 @@ export default class UnreadPlusPlugin extends Plugin {
       name: 'Next in review',
       checkCallback: (checking: boolean) => {
         if (!this.reviewMode.isActive()) return false;
-        if (!checking) this.reviewMode.next(this.app, this.stateManager, this);
+        if (!checking) void this.reviewMode.next(this.app, this.stateManager, this);
         return true;
       },
     });
@@ -313,24 +312,23 @@ export default class UnreadPlusPlugin extends Plugin {
     const counts = this.stateManager.getOpenCounts();
     this.statusBarItem.empty();
     if (counts.length === 0) {
-      this.statusBarItem.style.display = 'none';
+      this.statusBarItem.addClass('unread-plus-hidden');
       return;
     }
-    this.statusBarItem.style.display = '';
+    this.statusBarItem.removeClass('unread-plus-hidden');
     for (const { config, count } of counts) {
-      const span = this.statusBarItem.createSpan();
-      span.style.color = config.color;
-      span.style.marginRight = '6px';
+      const span = this.statusBarItem.createSpan({ cls: 'unread-plus-status-bar-dot' });
+      span.setCssStyles({ color: config.color });
       span.textContent = `${count}●`;
     }
   }
 
   private scheduleSnoozeWakeup(): void {
-    if (this.snoozeWakeupTimer !== null) clearTimeout(this.snoozeWakeupTimer);
+    if (this.snoozeWakeupTimer !== null) window.clearTimeout(this.snoozeWakeupTimer);
     const next = this.stateManager.nextSnoozeExpiry();
     if (next === null) return;
     const delay = Math.max(next - Date.now(), 0);
-    this.snoozeWakeupTimer = setTimeout(() => {
+    this.snoozeWakeupTimer = window.setTimeout(() => {
       this.snoozeWakeupTimer = null;
       this.stateManager.clearExpiredSnoozes();
       this.stateManager.scheduleSave();
@@ -340,11 +338,9 @@ export default class UnreadPlusPlugin extends Plugin {
   }
 
   private makeMenuDot(color: string, char = '●'): HTMLSpanElement {
-    const span = document.createElement('span');
+    const span = activeDocument.createElement('span');
     span.textContent = char + ' ';
-    span.style.color = color;
-    span.style.fontSize = '10px';
-    span.style.marginRight = '2px';
+    span.setCssStyles({ color, fontSize: '10px', marginRight: '2px' });
     return span;
   }
 
@@ -361,9 +357,9 @@ export default class UnreadPlusPlugin extends Plugin {
         for (const config of configs) {
           if (current?.statusId === config.id) continue;
           menu.addItem(item => {
-            const frag = document.createDocumentFragment();
+            const frag = activeDocument.createDocumentFragment();
             frag.appendChild(this.makeMenuDot(config.color));
-            frag.appendChild(document.createTextNode(config.label));
+            frag.appendChild(activeDocument.createTextNode(config.label));
             item.setTitle(frag).onClick(() => this.setFileStatus(file.path, config.id));
           });
         }
@@ -398,9 +394,9 @@ export default class UnreadPlusPlugin extends Plugin {
 
           menu.addSeparator();
           menu.addItem(item => {
-            const frag = document.createDocumentFragment();
+            const frag = activeDocument.createDocumentFragment();
             if (currentConfig) frag.appendChild(this.makeMenuDot(currentConfig.color, '○'));
-            frag.appendChild(document.createTextNode('Mark as read'));
+            frag.appendChild(activeDocument.createTextNode('Mark as read'));
             item.setTitle(frag).onClick(() => this.clearFileStatus(file.path));
           });
         }

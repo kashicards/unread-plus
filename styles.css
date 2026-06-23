@@ -1,6 +1,6 @@
 /* ── File dot — pushed to end of line ── */
 .nav-file-title {
-  display: flex !important;
+  display: flex;
   align-items: center;
 }
 
@@ -28,7 +28,7 @@
 
 /* ── Folder badge — pushed to end of line ── */
 .nav-folder-title {
-  display: flex !important;
+  display: flex;
   align-items: center;
 }
 
@@ -44,6 +44,10 @@
   opacity: 0.9;
   line-height: 1;
 }
+
+/* ── Status bar ── */
+.unread-plus-hidden { display: none; }
+.unread-plus-status-bar-dot { margin-right: 6px; }
 
 /* ── Settings status list ── */
 .unread-plus-status-list {

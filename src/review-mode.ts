@@ -6,7 +6,7 @@ export class ReviewMode {
   private queue: string[] = [];
   private index = -1;
   private active = false;
-  private autoMarkTimer: ReturnType<typeof setTimeout> | null = null;
+  private autoMarkTimer: number | null = null;
 
   isActive(): boolean {
     return this.active;
@@ -65,8 +65,8 @@ export class ReviewMode {
 
       const seconds = stateManager.getSettings().reviewAutoMarkSeconds;
       if (seconds > 0) {
-        if (this.autoMarkTimer !== null) clearTimeout(this.autoMarkTimer);
-        this.autoMarkTimer = setTimeout(() => {
+        if (this.autoMarkTimer !== null) window.clearTimeout(this.autoMarkTimer);
+        this.autoMarkTimer = window.setTimeout(() => {
           plugin.clearFileStatus(path);
           this.autoMarkTimer = null;
         }, seconds * 1000);
@@ -78,7 +78,7 @@ export class ReviewMode {
 
   stop(): void {
     if (this.autoMarkTimer !== null) {
-      clearTimeout(this.autoMarkTimer);
+      window.clearTimeout(this.autoMarkTimer);
       this.autoMarkTimer = null;
     }
     this.active = false;

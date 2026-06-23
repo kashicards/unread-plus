@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Setting, Notice } from 'obsidian';
+import { App, Notice, PluginSettingTab, Setting } from 'obsidian';
 import type UnreadPlusPlugin from '../main';
 
 export class SettingsTab extends PluginSettingTab {
@@ -17,7 +17,7 @@ export class SettingsTab extends PluginSettingTab {
   }
 
   private renderGeneralSection(el: HTMLElement): void {
-    el.createEl('h2', { text: 'General' });
+    new Setting(el).setName('General').setHeading();
 
     new Setting(el)
       .setName('Auto-read delay (seconds)')
@@ -62,7 +62,7 @@ export class SettingsTab extends PluginSettingTab {
   }
 
   private renderIgnoreSection(el: HTMLElement): void {
-    el.createEl('h2', { text: 'Ignore' });
+    new Setting(el).setName('Ignore').setHeading();
 
     new Setting(el)
       .setName('Ignored paths')
@@ -76,7 +76,7 @@ export class SettingsTab extends PluginSettingTab {
             await this.plugin.stateManager.save();
           });
         text.inputEl.rows = 4;
-        text.inputEl.style.width = '100%';
+        text.inputEl.setCssStyles({ width: '100%' });
       });
 
     new Setting(el)
@@ -94,7 +94,7 @@ export class SettingsTab extends PluginSettingTab {
   }
 
   private renderStatusSection(el: HTMLElement): void {
-    el.createEl('h2', { text: 'Statuses' });
+    new Setting(el).setName('Statuses').setHeading();
     el.createEl('p', {
       text: 'Each status can be applied via right-click. Statuses marked "Counts as open" appear in folder badges.',
       cls: 'setting-item-description',
@@ -134,10 +134,10 @@ export class SettingsTab extends PluginSettingTab {
       // Color picker
       const colorInput = row.createEl('input', { type: 'color' });
       colorInput.value = config.color;
-      colorInput.addEventListener('change', async () => {
+      colorInput.addEventListener('change', () => {
         configs[i] = { ...configs[i], color: colorInput.value };
         this.plugin.stateManager.updateStatusConfigs([...configs]);
-        await this.plugin.stateManager.save();
+        this.plugin.stateManager.save().catch(() => {});
         this.plugin.badgeRenderer.refresh();
       });
 
@@ -145,10 +145,10 @@ export class SettingsTab extends PluginSettingTab {
       const labelInput = row.createEl('input', { type: 'text' });
       labelInput.value = config.label;
       labelInput.placeholder = 'Label';
-      labelInput.addEventListener('change', async () => {
+      labelInput.addEventListener('change', () => {
         configs[i] = { ...configs[i], label: labelInput.value };
         this.plugin.stateManager.updateStatusConfigs([...configs]);
-        await this.plugin.stateManager.save();
+        this.plugin.stateManager.save().catch(() => {});
       });
 
       // Counts as open toggle
@@ -156,23 +156,23 @@ export class SettingsTab extends PluginSettingTab {
       const toggleInput = toggleLabel.createEl('input', { type: 'checkbox' });
       toggleInput.checked = config.countsAsOpen;
       toggleLabel.createSpan({ text: ' Counts as open' });
-      toggleInput.addEventListener('change', async () => {
+      toggleInput.addEventListener('change', () => {
         configs[i] = { ...configs[i], countsAsOpen: toggleInput.checked };
         this.plugin.stateManager.updateStatusConfigs([...configs]);
-        await this.plugin.stateManager.save();
+        this.plugin.stateManager.save().catch(() => {});
         this.plugin.badgeRenderer.refresh();
       });
 
       // Delete button (prevent deleting last status)
       const deleteBtn = row.createEl('button', { text: '✕' });
-      deleteBtn.addEventListener('click', async () => {
+      deleteBtn.addEventListener('click', () => {
         if (configs.length <= 1) {
           new Notice('At least one status is required.');
           return;
         }
         configs.splice(i, 1);
         this.plugin.stateManager.updateStatusConfigs([...configs]);
-        await this.plugin.stateManager.save();
+        this.plugin.stateManager.save().catch(() => {});
         listEl.empty();
         this.renderStatusList(listEl);
       });
@@ -180,7 +180,7 @@ export class SettingsTab extends PluginSettingTab {
   }
 
   private renderReviewSection(el: HTMLElement): void {
-    el.createEl('h2', { text: 'Queue (Ctrl+Shift+U)' });
+    new Setting(el).setName('Queue (Ctrl+Shift+U)').setHeading();
     el.createEl('p', {
       text: 'Opens all files with a status (Unread, Later, …) one by one. "Counts as open" on each status controls which ones appear here.',
       cls: 'setting-item-description',

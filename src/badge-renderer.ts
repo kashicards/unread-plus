@@ -15,7 +15,7 @@ export class BadgeRenderer {
     });
   }
 
-stop(): void {
+  stop(): void {
     this.observer?.disconnect();
     this.observer = null;
     this.clearAll();
@@ -62,7 +62,7 @@ stop(): void {
       const config = configMap.get(status.statusId);
       if (!config) return;
 
-      const dot = document.createElement('span');
+      const dot = activeDocument.createElement('span');
       dot.className = 'unread-plus-dot';
       dot.setAttribute('data-status', status.statusId);
       dot.style.setProperty('--dot-color', config.color);
@@ -96,10 +96,10 @@ stop(): void {
       const count = folderCounts.get(path);
       if (!count || count.segments.length === 0) return;
 
-      const badge = document.createElement('span');
+      const badge = activeDocument.createElement('span');
       badge.className = 'unread-plus-folder-badge';
       for (const seg of count.segments) {
-        const span = document.createElement('span');
+        const span = activeDocument.createElement('span');
         span.textContent = `${seg.count}●`;
         span.style.color = seg.color;
         badge.appendChild(span);
@@ -112,25 +112,27 @@ stop(): void {
     const container = this.getExplorerContainer();
     if (!container) return;
 
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    let debounceTimer: number | null = null;
 
     this.observer = new MutationObserver((mutations) => {
       if (this.isRendering) return;
       // Ignore mutations caused entirely by our own injected elements —
       // otherwise adding dots triggers a re-render which adds dots which triggers...
       const isOwnChange = mutations.every(m => {
-        const isOwnNode = (n: Node) =>
-          n instanceof Element &&
-          (n.classList.contains('unread-plus-dot') ||
-           n.classList.contains('unread-plus-folder-badge'));
+        const isOwnNode = (n: Node) => {
+          if (n.nodeType !== 1) return false;
+          const el = n as Element;
+          return el.classList.contains('unread-plus-dot') ||
+                 el.classList.contains('unread-plus-folder-badge');
+        };
         return (
           Array.from(m.addedNodes).every(isOwnNode) &&
           Array.from(m.removedNodes).every(isOwnNode)
         );
       });
       if (isOwnChange) return;
-      if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => this.refresh(), 50);
+      if (debounceTimer) window.clearTimeout(debounceTimer);
+      debounceTimer = window.setTimeout(() => this.refresh(), 50);
     });
 
     this.observer.observe(container, { childList: true, subtree: true });

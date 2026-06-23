@@ -9,7 +9,7 @@ export class StateManager {
   constructor(private plugin: Plugin) {}
 
   async load(): Promise<void> {
-    const saved = await this.plugin.loadData();
+    const saved = await this.plugin.loadData() as Partial<PluginData> | null;
     if (!saved) return;
     this.data = {
       ...DEFAULT_DATA,
@@ -52,11 +52,11 @@ export class StateManager {
     }
   }
 
-  private saveTimer: ReturnType<typeof setTimeout> | null = null;
+  private saveTimer: number | null = null;
 
   scheduleSave(): void {
-    if (this.saveTimer !== null) clearTimeout(this.saveTimer);
-    this.saveTimer = setTimeout(() => {
+    if (this.saveTimer !== null) window.clearTimeout(this.saveTimer);
+    this.saveTimer = window.setTimeout(() => {
       this.saveTimer = null;
       this.plugin.saveData(this.data).catch(() => {});
     }, 300);
@@ -64,7 +64,7 @@ export class StateManager {
 
   async flushSave(): Promise<void> {
     if (this.saveTimer !== null) {
-      clearTimeout(this.saveTimer);
+      window.clearTimeout(this.saveTimer);
       this.saveTimer = null;
     }
     await this.plugin.saveData(this.data);
@@ -179,8 +179,7 @@ export class StateManager {
   clearSnooze(path: string): void {
     const status = this.data.fileStatuses[path];
     if (status) {
-      const { snoozedUntil: _, ...rest } = status;
-      this.data.fileStatuses[path] = rest as FileStatus;
+      delete status.snoozedUntil;
     }
   }
 
@@ -191,10 +190,9 @@ export class StateManager {
 
   clearExpiredSnoozes(): void {
     const now = Date.now();
-    for (const [path, status] of Object.entries(this.data.fileStatuses)) {
+    for (const status of Object.values(this.data.fileStatuses)) {
       if (status.snoozedUntil && status.snoozedUntil <= now) {
-        const { snoozedUntil: _, ...rest } = status;
-        this.data.fileStatuses[path] = rest as FileStatus;
+        delete status.snoozedUntil;
       }
     }
   }
