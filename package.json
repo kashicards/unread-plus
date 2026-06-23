@@ -1,6 +1,6 @@
 {
   "name": "unread-plus",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Marks new files unread, propagates counts up folder tree",
   "main": "main.js",
   "scripts": {
