@@ -17,7 +17,6 @@ export class SettingsTab extends PluginSettingTab {
   }
 
   private renderGeneralSection(el: HTMLElement): void {
-    new Setting(el).setName('General').setHeading();
 
     new Setting(el)
       .setName('Auto-read delay (seconds)')
