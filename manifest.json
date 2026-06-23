@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "minAppVersion": "1.4.0",
   "description": "Marks new files with a dot. Propagates unread counts up the folder tree.",
-  "author": "yourname",
-  "authorUrl": "",
+  "author": "Lucy",
+  "authorUrl": "https://github.com/kashicards",
   "isDesktopOnly": false
 }
