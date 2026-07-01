@@ -47,6 +47,8 @@ cd unread-plus && npm install && npm run build
 | Action | How |
 |--------|-----|
 | Set status | Right-click file → pick status |
+| Set selected files unread | Select files → right-click → Mark selected as Unread |
+| Clear selected files | Select files → right-click → Mark selected as read |
 | Clear status | Right-click → Mark as read |
 | Snooze | Right-click → Snooze 1 day / 3 days / 1 week |
 | Open next unread | `Ctrl+Shift+U` |
