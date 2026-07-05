@@ -853,8 +853,24 @@ var UnreadPlusPlugin = class extends import_obsidian3.Plugin {
     });
     this.refreshUI();
   }
+  setFilesStatus(files, statusId) {
+    for (const file of files) {
+      this.stateManager.setStatus(file.path, statusId);
+    }
+    this.stateManager.save().catch(() => {
+    });
+    this.refreshUI();
+  }
   clearFileStatus(path) {
     this.stateManager.clearStatus(path);
+    this.stateManager.save().catch(() => {
+    });
+    this.refreshUI();
+  }
+  clearFilesStatus(files) {
+    for (const file of files) {
+      this.stateManager.clearStatus(file.path);
+    }
     this.stateManager.save().catch(() => {
     });
     this.refreshUI();
@@ -964,6 +980,27 @@ var UnreadPlusPlugin = class extends import_obsidian3.Plugin {
     return span;
   }
   registerContextMenu() {
+    this.registerEvent(
+      this.app.workspace.on("files-menu", (menu, files) => {
+        const selectedFiles = files.filter(
+          (file) => file instanceof import_obsidian3.TFile && !this.stateManager.isIgnored(file.path)
+        );
+        if (selectedFiles.length === 0) return;
+        const unreadConfig = this.stateManager.getStatusConfig("unread");
+        menu.addSeparator();
+        if (unreadConfig) {
+          menu.addItem((item) => {
+            const frag = activeDocument.createDocumentFragment();
+            frag.appendChild(this.makeMenuDot(unreadConfig.color));
+            frag.appendChild(activeDocument.createTextNode("Mark selected as Unread"));
+            item.setTitle(frag).onClick(() => this.setFilesStatus(selectedFiles, unreadConfig.id));
+          });
+        }
+        menu.addItem(
+          (item) => item.setTitle("Mark selected as read").setIcon("check-circle").onClick(() => this.clearFilesStatus(selectedFiles))
+        );
+      })
+    );
     this.registerEvent(
       this.app.workspace.on("file-menu", (menu, file) => {
         if (!(file instanceof import_obsidian3.TFile)) return;
