@@ -684,6 +684,11 @@ var UnreadPlusPlugin = class extends import_obsidian3.Plugin {
     this.autoReadTimers = /* @__PURE__ */ new Map();
     this.recentlyRenamedPaths = /* @__PURE__ */ new Set();
     this.sessionOpenedPaths = /* @__PURE__ */ new Set();
+    // Tracks files we auto-marked 'unread' via onFileCreated, keyed by the
+    // markedAt timestamp we applied. If the user opens such a file later
+    // (however long template prompts / manual edits take), we undo the
+    // auto-mark — opening it is proof the user created it themselves.
+    this.pendingAutoUnread = /* @__PURE__ */ new Map();
     this.isLayoutReady = false;
     this.snoozeWakeupTimer = null;
   }
@@ -796,6 +801,8 @@ var UnreadPlusPlugin = class extends import_obsidian3.Plugin {
       if (this.isUnderRecentlyRenamedPath(file.path)) return;
       if (this.stateManager.getKnownPaths().has(file.path)) return;
       this.stateManager.setStatus(file.path, "unread");
+      const applied = this.stateManager.getStatus(file.path);
+      if (applied) this.pendingAutoUnread.set(file.path, applied.markedAt);
       this.stateManager.scheduleSave();
       this.refreshUI();
     }, 150);
@@ -805,6 +812,12 @@ var UnreadPlusPlugin = class extends import_obsidian3.Plugin {
       if (p === oldPath || p.startsWith(oldPath + "/")) {
         this.sessionOpenedPaths.delete(p);
         this.sessionOpenedPaths.add(file.path + p.slice(oldPath.length));
+      }
+    }
+    for (const [p, ts] of [...this.pendingAutoUnread]) {
+      if (p === oldPath || p.startsWith(oldPath + "/")) {
+        this.pendingAutoUnread.delete(p);
+        this.pendingAutoUnread.set(file.path + p.slice(oldPath.length), ts);
       }
     }
     const hadStatusBefore = this.stateManager.getStatus(oldPath);
@@ -828,12 +841,25 @@ var UnreadPlusPlugin = class extends import_obsidian3.Plugin {
   }
   onFileDeleted(file) {
     this.stateManager.deletePath(file.path);
+    for (const p of [...this.pendingAutoUnread.keys()]) {
+      if (p === file.path || p.startsWith(file.path + "/")) this.pendingAutoUnread.delete(p);
+    }
     this.stateManager.scheduleSave();
     this.refreshUI();
   }
   onFileOpen(file) {
     if (!file) return;
     this.sessionOpenedPaths.add(file.path);
+    const autoMarkedAt = this.pendingAutoUnread.get(file.path);
+    if (autoMarkedAt !== void 0) {
+      this.pendingAutoUnread.delete(file.path);
+      const status = this.stateManager.getStatus(file.path);
+      if ((status == null ? void 0 : status.statusId) === "unread" && status.markedAt === autoMarkedAt) {
+        this.stateManager.clearStatus(file.path);
+        this.stateManager.scheduleSave();
+        this.refreshUI();
+      }
+    }
     const existing = this.autoReadTimers.get(file.path);
     if (existing) window.clearTimeout(existing);
     const seconds = this.stateManager.getSettings().autoReadSeconds;
@@ -996,9 +1022,12 @@ var UnreadPlusPlugin = class extends import_obsidian3.Plugin {
             item.setTitle(frag).onClick(() => this.setFilesStatus(selectedFiles, unreadConfig.id));
           });
         }
-        menu.addItem(
-          (item) => item.setTitle("Mark selected as read").setIcon("check-circle").onClick(() => this.clearFilesStatus(selectedFiles))
-        );
+        menu.addItem((item) => {
+          const frag = activeDocument.createDocumentFragment();
+          if (unreadConfig) frag.appendChild(this.makeMenuDot(unreadConfig.color, "\u25CB"));
+          frag.appendChild(activeDocument.createTextNode("Mark selected as read"));
+          item.setTitle(frag).onClick(() => this.clearFilesStatus(selectedFiles));
+        });
       })
     );
     this.registerEvent(

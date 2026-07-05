@@ -12,6 +12,11 @@ export default class UnreadPlusPlugin extends Plugin {
   private autoReadTimers = new Map<string, number>();
   private recentlyRenamedPaths = new Set<string>();
   private sessionOpenedPaths = new Set<string>();
+  // Tracks files we auto-marked 'unread' via onFileCreated, keyed by the
+  // markedAt timestamp we applied. If the user opens such a file later
+  // (however long template prompts / manual edits take), we undo the
+  // auto-mark — opening it is proof the user created it themselves.
+  private pendingAutoUnread = new Map<string, number>();
   private isLayoutReady = false;
   private statusBarItem!: HTMLElement;
   private snoozeWakeupTimer: number | null = null;
@@ -156,6 +161,8 @@ export default class UnreadPlusPlugin extends Plugin {
       if (this.isUnderRecentlyRenamedPath(file.path)) return;
       if (this.stateManager.getKnownPaths().has(file.path)) return;
       this.stateManager.setStatus(file.path, 'unread');
+      const applied = this.stateManager.getStatus(file.path);
+      if (applied) this.pendingAutoUnread.set(file.path, applied.markedAt);
       this.stateManager.scheduleSave();
       this.refreshUI();
     }, 150);
@@ -166,6 +173,13 @@ export default class UnreadPlusPlugin extends Plugin {
       if (p === oldPath || p.startsWith(oldPath + '/')) {
         this.sessionOpenedPaths.delete(p);
         this.sessionOpenedPaths.add(file.path + p.slice(oldPath.length));
+      }
+    }
+
+    for (const [p, ts] of [...this.pendingAutoUnread]) {
+      if (p === oldPath || p.startsWith(oldPath + '/')) {
+        this.pendingAutoUnread.delete(p);
+        this.pendingAutoUnread.set(file.path + p.slice(oldPath.length), ts);
       }
     }
 
@@ -196,6 +210,9 @@ export default class UnreadPlusPlugin extends Plugin {
 
   private onFileDeleted(file: TAbstractFile): void {
     this.stateManager.deletePath(file.path);
+    for (const p of [...this.pendingAutoUnread.keys()]) {
+      if (p === file.path || p.startsWith(file.path + '/')) this.pendingAutoUnread.delete(p);
+    }
     this.stateManager.scheduleSave();
     this.refreshUI();
   }
@@ -203,6 +220,19 @@ export default class UnreadPlusPlugin extends Plugin {
   private onFileOpen(file: TFile | null): void {
     if (!file) return;
     this.sessionOpenedPaths.add(file.path);
+
+    const autoMarkedAt = this.pendingAutoUnread.get(file.path);
+    if (autoMarkedAt !== undefined) {
+      this.pendingAutoUnread.delete(file.path);
+      const status = this.stateManager.getStatus(file.path);
+      // Only undo if the status is still exactly what we auto-applied —
+      // if the user has since explicitly changed it, respect their choice.
+      if (status?.statusId === 'unread' && status.markedAt === autoMarkedAt) {
+        this.stateManager.clearStatus(file.path);
+        this.stateManager.scheduleSave();
+        this.refreshUI();
+      }
+    }
 
     const existing = this.autoReadTimers.get(file.path);
     if (existing) window.clearTimeout(existing);
@@ -381,10 +411,12 @@ export default class UnreadPlusPlugin extends Plugin {
           });
         }
 
-        menu.addItem(item =>
-          item.setTitle('Mark selected as read').setIcon('check-circle')
-            .onClick(() => this.clearFilesStatus(selectedFiles))
-        );
+        menu.addItem(item => {
+          const frag = activeDocument.createDocumentFragment();
+          if (unreadConfig) frag.appendChild(this.makeMenuDot(unreadConfig.color, '○'));
+          frag.appendChild(activeDocument.createTextNode('Mark selected as read'));
+          item.setTitle(frag).onClick(() => this.clearFilesStatus(selectedFiles));
+        });
       })
     );
 
