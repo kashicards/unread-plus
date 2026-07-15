@@ -7,6 +7,7 @@ export class Plugin {
 export class TFile { path = ''; basename = ''; extension = ''; }
 export class TFolder { path = ''; }
 export class TAbstractFile { path = ''; }
+export class FileView { file: TFile | null = null; }
 export class Notice { constructor(_msg: string) {} }
 export class PluginSettingTab {
   constructor(public app: any, public plugin: any) {}

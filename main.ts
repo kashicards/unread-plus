@@ -144,7 +144,7 @@ export default class UnreadPlusPlugin extends Plugin {
   private onFileCreated(file: TAbstractFile): void {
     if (!(file instanceof TFile)) return;
     if (this.stateManager.isIgnored(file.path)) return;
-    if (this.getOpenFilePaths().has(file.path)) return;
+    if (this.wasOpenedThisSession(file.path)) return;
     if (this.stateManager.isExplicitlyRead(file.path)) return;
     if (this.isUnderRecentlyRenamedPath(file.path)) return;
     // Obsidian fires a second wave of 'create' events for pre-existing files after
@@ -156,7 +156,7 @@ export default class UnreadPlusPlugin extends Plugin {
     // Obsidian opens freshly created notes in a leaf shortly after emitting 'create',
     // so re-check after a tick to avoid briefly flashing user-created notes as unread.
     window.setTimeout(() => {
-      if (this.getOpenFilePaths().has(file.path)) return;
+      if (this.wasOpenedThisSession(file.path)) return;
       if (this.stateManager.isExplicitlyRead(file.path)) return;
       if (this.isUnderRecentlyRenamedPath(file.path)) return;
       if (this.stateManager.getKnownPaths().has(file.path)) return;
@@ -199,6 +199,14 @@ export default class UnreadPlusPlugin extends Plugin {
     window.setTimeout(() => this.recentlyRenamedPaths.delete(file.path), 1000);
     this.stateManager.save().catch(() => {});
     this.refreshUI();
+  }
+
+  // A file counts as user-opened if it's in a leaf right now, or if it was
+  // opened earlier this session (file-open fires once on creation, but a
+  // template-insertion plugin can briefly swap the leaf away from a FileView
+  // afterwards — that shouldn't make an already-opened note look unread).
+  private wasOpenedThisSession(filePath: string): boolean {
+    return this.getOpenFilePaths().has(filePath) || this.sessionOpenedPaths.has(filePath);
   }
 
   private isUnderRecentlyRenamedPath(filePath: string): boolean {

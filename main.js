@@ -791,12 +791,12 @@ var UnreadPlusPlugin = class extends import_obsidian3.Plugin {
   onFileCreated(file) {
     if (!(file instanceof import_obsidian3.TFile)) return;
     if (this.stateManager.isIgnored(file.path)) return;
-    if (this.getOpenFilePaths().has(file.path)) return;
+    if (this.wasOpenedThisSession(file.path)) return;
     if (this.stateManager.isExplicitlyRead(file.path)) return;
     if (this.isUnderRecentlyRenamedPath(file.path)) return;
     if (this.stateManager.getKnownPaths().has(file.path)) return;
     window.setTimeout(() => {
-      if (this.getOpenFilePaths().has(file.path)) return;
+      if (this.wasOpenedThisSession(file.path)) return;
       if (this.stateManager.isExplicitlyRead(file.path)) return;
       if (this.isUnderRecentlyRenamedPath(file.path)) return;
       if (this.stateManager.getKnownPaths().has(file.path)) return;
@@ -832,6 +832,13 @@ var UnreadPlusPlugin = class extends import_obsidian3.Plugin {
     this.stateManager.save().catch(() => {
     });
     this.refreshUI();
+  }
+  // A file counts as user-opened if it's in a leaf right now, or if it was
+  // opened earlier this session (file-open fires once on creation, but a
+  // template-insertion plugin can briefly swap the leaf away from a FileView
+  // afterwards — that shouldn't make an already-opened note look unread).
+  wasOpenedThisSession(filePath) {
+    return this.getOpenFilePaths().has(filePath) || this.sessionOpenedPaths.has(filePath);
   }
   isUnderRecentlyRenamedPath(filePath) {
     for (const p of this.recentlyRenamedPaths) {
