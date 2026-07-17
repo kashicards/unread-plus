@@ -101,4 +101,12 @@ describe('StateManager', () => {
     expect(sm.getStatus('old/a.md')).toBeUndefined();
     expect(sm.getStatus('other/b.md')).toBeDefined();
   });
+
+  it('pruneFileStatuses removes statuses for paths no longer in the vault', () => {
+    sm.setStatus('gone/a.md', 'unread');
+    sm.setStatus('still/b.md', 'unread');
+    sm.pruneFileStatuses(new Set(['still/b.md']));
+    expect(sm.getStatus('gone/a.md')).toBeUndefined();
+    expect(sm.getStatus('still/b.md')).toBeDefined();
+  });
 });

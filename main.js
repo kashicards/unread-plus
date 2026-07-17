@@ -136,6 +136,11 @@ var StateManager = class {
   pruneReadPaths(validPaths) {
     this.data.readPaths = this.data.readPaths.filter((p) => validPaths.has(p));
   }
+  pruneFileStatuses(validPaths) {
+    for (const path of Object.keys(this.data.fileStatuses)) {
+      if (!validPaths.has(path)) delete this.data.fileStatuses[path];
+    }
+  }
   getStatus(path) {
     return this.data.fileStatuses[path];
   }
@@ -766,7 +771,9 @@ var UnreadPlusPlugin = class extends import_obsidian3.Plugin {
     const currentFiles = this.app.vault.getFiles();
     const moved = this.stateManager.popMovedPaths();
     const isRecentlyMoved = (path) => moved.some((p) => path === p || path.startsWith(p + "/"));
-    this.stateManager.pruneReadPaths(new Set(currentFiles.map((f) => f.path)));
+    const currentPaths = new Set(currentFiles.map((f) => f.path));
+    this.stateManager.pruneReadPaths(currentPaths);
+    this.stateManager.pruneFileStatuses(currentPaths);
     const hasBaseline = known.size > 0 || lastClose > 0;
     if (hasBaseline) {
       for (const file of currentFiles) {

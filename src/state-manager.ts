@@ -95,6 +95,12 @@ export class StateManager {
     this.data.readPaths = this.data.readPaths.filter(p => validPaths.has(p));
   }
 
+  pruneFileStatuses(validPaths: Set<string>): void {
+    for (const path of Object.keys(this.data.fileStatuses)) {
+      if (!validPaths.has(path)) delete this.data.fileStatuses[path];
+    }
+  }
+
   getStatus(path: string): FileStatus | undefined {
     return this.data.fileStatuses[path];
   }

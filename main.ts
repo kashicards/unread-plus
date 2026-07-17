@@ -109,7 +109,9 @@ export default class UnreadPlusPlugin extends Plugin {
     const isRecentlyMoved = (path: string) =>
       moved.some(p => path === p || path.startsWith(p + '/'));
 
-    this.stateManager.pruneReadPaths(new Set(currentFiles.map(f => f.path)));
+    const currentPaths = new Set(currentFiles.map(f => f.path));
+    this.stateManager.pruneReadPaths(currentPaths);
+    this.stateManager.pruneFileStatuses(currentPaths);
 
     const hasBaseline = known.size > 0 || lastClose > 0;
 
