@@ -64,3 +64,93 @@ describe('onFileCreated vs. session-open race (Templater-style delayed insert)',
     expect(plugin.stateManager.getStatus(file.path)).toBeUndefined();
   });
 });
+
+describe('onFileCreated grace period', () => {
+  let leaves: Array<{ view: unknown }>;
+  let plugin: UnreadPlusPlugin;
+  let file: TFile;
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    file = new TFile();
+    file.path = 'notes/new.md';
+    leaves = [];
+    plugin = makePlugin(makeApp(leaves));
+    await plugin.stateManager.load();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('does not mark unread if the file becomes active before the grace period elapses', () => {
+    plugin.stateManager.updateSettings({ newFileGraceSeconds: 1 });
+    (plugin as any).onFileCreated(file);
+
+    vi.advanceTimersByTime(400);
+    (plugin as any).onFileOpen(file);
+    vi.advanceTimersByTime(700);
+
+    expect(plugin.stateManager.getStatus(file.path)).toBeUndefined();
+  });
+
+  it('marks unread once the grace period elapses if the file was never opened', () => {
+    plugin.stateManager.updateSettings({ newFileGraceSeconds: 1 });
+    (plugin as any).onFileCreated(file);
+
+    vi.advanceTimersByTime(1100);
+
+    expect(plugin.stateManager.getStatus(file.path)?.statusId).toBe('unread');
+  });
+
+  it('treats newFileGraceSeconds of 0 as an immediate single check', () => {
+    plugin.stateManager.updateSettings({ newFileGraceSeconds: 0 });
+    (plugin as any).onFileCreated(file);
+
+    vi.advanceTimersByTime(1);
+
+    expect(plugin.stateManager.getStatus(file.path)?.statusId).toBe('unread');
+  });
+
+  it('does not mark unread if the file is opened right at the end of a longer grace period', () => {
+    plugin.stateManager.updateSettings({ newFileGraceSeconds: 5 });
+    (plugin as any).onFileCreated(file);
+
+    vi.advanceTimersByTime(4950);
+    (plugin as any).onFileOpen(file);
+    vi.advanceTimersByTime(100);
+
+    expect(plugin.stateManager.getStatus(file.path)).toBeUndefined();
+  });
+
+  it('cancels the pending grace check when the file is deleted mid-grace-period', () => {
+    plugin.stateManager.updateSettings({ newFileGraceSeconds: 5 });
+    (plugin as any).onFileCreated(file);
+
+    vi.advanceTimersByTime(500);
+    (plugin as any).onFileDeleted(file);
+
+    expect((plugin as any).pendingGraceChecks.size).toBe(0);
+
+    vi.advanceTimersByTime(5000);
+    expect(plugin.stateManager.getStatus(file.path)).toBeUndefined();
+  });
+
+  it('remaps the pending grace check to the new path when the file is renamed mid-grace-period', () => {
+    plugin.stateManager.updateSettings({ newFileGraceSeconds: 2 });
+    (plugin as any).onFileCreated(file);
+
+    vi.advanceTimersByTime(500);
+    const renamed = new TFile();
+    renamed.path = 'notes/renamed.md';
+    (plugin as any).onFileRenamed(renamed, file.path);
+
+    expect((plugin as any).pendingGraceChecks.has(file.path)).toBe(false);
+    expect((plugin as any).pendingGraceChecks.has(renamed.path)).toBe(true);
+
+    vi.advanceTimersByTime(2000);
+
+    expect(plugin.stateManager.getStatus(file.path)).toBeUndefined();
+    expect(plugin.stateManager.getStatus(renamed.path)?.statusId).toBe('unread');
+  });
+});

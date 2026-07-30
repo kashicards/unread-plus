@@ -34,6 +34,21 @@ export class SettingsTab extends PluginSettingTab {
       });
 
     new Setting(el)
+      .setName('New file grace period (seconds)')
+      .setDesc('How long after creating a file to watch whether it becomes the active file, before marking it unread. Increase if you see false unread marks when creating and leaving files very quickly. Max 10.')
+      .addText(text => {
+        text
+          .setValue(String(this.plugin.stateManager.getSettings().newFileGraceSeconds))
+          .onChange(async value => {
+            const n = parseInt(value, 10);
+            if (!isNaN(n) && n >= 0 && n <= 10) {
+              this.plugin.stateManager.updateSettings({ newFileGraceSeconds: n });
+              await this.plugin.stateManager.save();
+            }
+          });
+      });
+
+    new Setting(el)
       .setName('Show status label in badge')
       .setDesc('Display "● Unread" instead of just "●" next to file names.')
       .addToggle(toggle => {

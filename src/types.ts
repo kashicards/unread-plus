@@ -19,6 +19,7 @@ export interface UnreadPlusSettings {
   dotAging: boolean;
   reviewOrder: 'created' | 'folder' | 'random';
   reviewAutoMarkSeconds: number;
+  newFileGraceSeconds: number;
 }
 
 export interface PluginData {
@@ -50,6 +51,7 @@ export const DEFAULT_SETTINGS: UnreadPlusSettings = {
   dotAging: true,
   reviewOrder: 'created',
   reviewAutoMarkSeconds: 0,
+  newFileGraceSeconds: 2,
 };
 
 export const DEFAULT_DATA: PluginData = {

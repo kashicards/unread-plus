@@ -109,4 +109,21 @@ describe('StateManager', () => {
     expect(sm.getStatus('gone/a.md')).toBeUndefined();
     expect(sm.getStatus('still/b.md')).toBeDefined();
   });
+
+  it('defaults newFileGraceSeconds to 2', () => {
+    expect(sm.getSettings().newFileGraceSeconds).toBe(2);
+  });
+
+  it('fills in newFileGraceSeconds default for settings saved before this option existed', async () => {
+    const mockPlugin = {
+      loadData: async () => ({
+        version: 4,
+        settings: { autoReadSeconds: 0, ignorePaths: [], ignoreExtensions: [], badgeShowLabel: false, dotAging: true, reviewOrder: 'created', reviewAutoMarkSeconds: 0 },
+      }),
+      saveData: async () => {},
+    } as any;
+    const legacy = new StateManager(mockPlugin);
+    await legacy.load();
+    expect(legacy.getSettings().newFileGraceSeconds).toBe(2);
+  });
 });

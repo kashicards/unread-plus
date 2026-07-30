@@ -17,6 +17,8 @@ export default class UnreadPlusPlugin extends Plugin {
   // (however long template prompts / manual edits take), we undo the
   // auto-mark — opening it is proof the user created it themselves.
   private pendingAutoUnread = new Map<string, number>();
+  private pendingGraceChecks = new Map<string, { timeoutId: number; deadline: number }>();
+  private static readonly GRACE_POLL_INTERVAL_MS = 100;
   private isLayoutReady = false;
   private statusBarItem!: HTMLElement;
   private snoozeWakeupTimer: number | null = null;
@@ -43,6 +45,8 @@ export default class UnreadPlusPlugin extends Plugin {
     this.badgeRenderer.stop();
     this.autoReadTimers.forEach(t => window.clearTimeout(t));
     this.autoReadTimers.clear();
+    this.pendingGraceChecks.forEach(({ timeoutId }) => window.clearTimeout(timeoutId));
+    this.pendingGraceChecks.clear();
     if (this.snoozeWakeupTimer !== null) window.clearTimeout(this.snoozeWakeupTimer);
     this.stateManager.setKnownPaths(this.app.vault.getFiles().map(f => f.path));
     this.stateManager.setLastCloseTime(Date.now());
@@ -155,19 +159,46 @@ export default class UnreadPlusPlugin extends Plugin {
     // in knownPaths — treat those creates as spurious and skip them.
     if (this.stateManager.getKnownPaths().has(file.path)) return;
 
-    // Obsidian opens freshly created notes in a leaf shortly after emitting 'create',
-    // so re-check after a tick to avoid briefly flashing user-created notes as unread.
-    window.setTimeout(() => {
-      if (this.wasOpenedThisSession(file.path)) return;
-      if (this.stateManager.isExplicitlyRead(file.path)) return;
-      if (this.isUnderRecentlyRenamedPath(file.path)) return;
-      if (this.stateManager.getKnownPaths().has(file.path)) return;
-      this.stateManager.setStatus(file.path, 'unread');
-      const applied = this.stateManager.getStatus(file.path);
-      if (applied) this.pendingAutoUnread.set(file.path, applied.markedAt);
+    const graceMs = this.stateManager.getSettings().newFileGraceSeconds * 1000;
+    this.startGraceCheck(file.path, Date.now() + graceMs);
+  }
+
+  // Polls whether `path` becomes the active file at any point before `deadline`
+  // (instead of a single point-in-time check), so a user who creates, pastes,
+  // and switches away very fast is still recognized as having opened the file
+  // even if Obsidian's own 'file-open' event lands later than a short fixed
+  // window would allow for.
+  private startGraceCheck(path: string, deadline: number): void {
+    const existing = this.pendingGraceChecks.get(path);
+    if (existing) window.clearTimeout(existing.timeoutId);
+
+    const poll = () => {
+      if (this.wasOpenedThisSession(path)) {
+        this.pendingGraceChecks.delete(path);
+        return;
+      }
+
+      if (Date.now() < deadline) {
+        const delay = Math.min(UnreadPlusPlugin.GRACE_POLL_INTERVAL_MS, deadline - Date.now());
+        const timeoutId = window.setTimeout(poll, delay);
+        this.pendingGraceChecks.set(path, { timeoutId, deadline });
+        return;
+      }
+
+      this.pendingGraceChecks.delete(path);
+      if (this.stateManager.isExplicitlyRead(path)) return;
+      if (this.isUnderRecentlyRenamedPath(path)) return;
+      if (this.stateManager.getKnownPaths().has(path)) return;
+      this.stateManager.setStatus(path, 'unread');
+      const applied = this.stateManager.getStatus(path);
+      if (applied) this.pendingAutoUnread.set(path, applied.markedAt);
       this.stateManager.scheduleSave();
       this.refreshUI();
-    }, 150);
+    };
+
+    const initialDelay = Math.min(UnreadPlusPlugin.GRACE_POLL_INTERVAL_MS, Math.max(deadline - Date.now(), 0));
+    const timeoutId = window.setTimeout(poll, initialDelay);
+    this.pendingGraceChecks.set(path, { timeoutId, deadline });
   }
 
   private onFileRenamed(file: TAbstractFile, oldPath: string): void {
@@ -182,6 +213,14 @@ export default class UnreadPlusPlugin extends Plugin {
       if (p === oldPath || p.startsWith(oldPath + '/')) {
         this.pendingAutoUnread.delete(p);
         this.pendingAutoUnread.set(file.path + p.slice(oldPath.length), ts);
+      }
+    }
+
+    for (const [p, entry] of [...this.pendingGraceChecks]) {
+      if (p === oldPath || p.startsWith(oldPath + '/')) {
+        window.clearTimeout(entry.timeoutId);
+        this.pendingGraceChecks.delete(p);
+        this.startGraceCheck(file.path + p.slice(oldPath.length), entry.deadline);
       }
     }
 
@@ -222,6 +261,12 @@ export default class UnreadPlusPlugin extends Plugin {
     this.stateManager.deletePath(file.path);
     for (const p of [...this.pendingAutoUnread.keys()]) {
       if (p === file.path || p.startsWith(file.path + '/')) this.pendingAutoUnread.delete(p);
+    }
+    for (const [p, entry] of [...this.pendingGraceChecks]) {
+      if (p === file.path || p.startsWith(file.path + '/')) {
+        window.clearTimeout(entry.timeoutId);
+        this.pendingGraceChecks.delete(p);
+      }
     }
     this.stateManager.scheduleSave();
     this.refreshUI();
