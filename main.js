@@ -679,6 +679,7 @@ var ReviewMode = class {
         continue;
       }
       await app.workspace.getLeaf(false).openFile(file);
+      new import_obsidian2.Notice(`Unread+: ${this.index + 1} von ${this.queue.length}`);
       const seconds = stateManager.getSettings().reviewAutoMarkSeconds;
       if (seconds > 0) {
         if (this.autoMarkTimer !== null) window.clearTimeout(this.autoMarkTimer);

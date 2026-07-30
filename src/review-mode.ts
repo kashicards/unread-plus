@@ -53,6 +53,7 @@ export class ReviewMode {
       }
 
       await app.workspace.getLeaf(false).openFile(file);
+      new Notice(`Unread+: ${this.index + 1} von ${this.queue.length}`);
 
       const seconds = stateManager.getSettings().reviewAutoMarkSeconds;
       if (seconds > 0) {
