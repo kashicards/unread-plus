@@ -5,7 +5,7 @@
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
-    "build": "tsc --noEmit --skipLibCheck && node esbuild.config.mjs production && copy main.js \"C:\\Users\\lucys\\Documents\\_workspace\\ObsidianVault\\.obsidian\\plugins\\unread-plus\\main.js\"",
+    "build": "tsc --noEmit --skipLibCheck && node esbuild.config.mjs production && copy main.js \"C:\\Users\\lucys\\Documents\\_workspace\\ObsidianVault\\.obsidian\\plugins\\unread-plus\\main.js\" && copy styles.css \"C:\\Users\\lucys\\Documents\\_workspace\\ObsidianVault\\.obsidian\\plugins\\unread-plus\\styles.css\" && copy manifest.json \"C:\\Users\\lucys\\Documents\\_workspace\\ObsidianVault\\.obsidian\\plugins\\unread-plus\\manifest.json\"",
     "test": "vitest run",
     "test:watch": "vitest"
   },
