@@ -187,11 +187,26 @@ export class SettingsTab extends PluginSettingTab {
           new Notice('At least one status is required.');
           return;
         }
-        configs.splice(i, 1);
-        this.plugin.stateManager.updateStatusConfigs([...configs]);
-        this.plugin.stateManager.save().catch(() => {});
-        listEl.empty();
-        this.renderStatusList(listEl);
+
+        const affectedPaths = Object.entries(this.plugin.stateManager.getAllFileStatuses())
+          .filter(([, status]) => status.statusId === config.id)
+          .map(([path]) => path);
+
+        const message = affectedPaths.length > 0
+          ? `Delete status "${config.label}"? ${affectedPaths.length} file(s) currently have this status and will be marked as read.`
+          : `Delete status "${config.label}"?`;
+
+        new ConfirmModal(this.app, message, () => {
+          for (const path of affectedPaths) {
+            this.plugin.stateManager.clearStatus(path);
+          }
+          configs.splice(i, 1);
+          this.plugin.stateManager.updateStatusConfigs([...configs]);
+          this.plugin.stateManager.save().catch(() => {});
+          this.plugin.badgeRenderer.refresh();
+          listEl.empty();
+          this.renderStatusList(listEl);
+        }).open();
       });
     }
   }
