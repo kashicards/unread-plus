@@ -56,8 +56,8 @@ describe('computeFolderCounts', () => {
     const counts = computeFolderCounts(statuses, CONFIGS);
     const segs = counts.get('Notes')?.segments ?? [];
     // unread comes first (config order), then later
-    expect(segs[0]).toMatchObject({ count: 1, color: '#4285F4' });
-    expect(segs[1]).toMatchObject({ count: 2, color: '#FF8C00' });
+    expect(segs[0]).toMatchObject({ count: 1, color: '#4285F4', label: 'Unread' });
+    expect(segs[1]).toMatchObject({ count: 2, color: '#FF8C00', label: 'Later' });
   });
 
   it('does not count root-level files (no parent folder)', () => {

@@ -31,7 +31,7 @@ export function computeFolderCounts(
     // Keep segments in statusConfigs order so display is consistent
     const segments = statusConfigs
       .filter(s => s.countsAsOpen && statusCounts.has(s.id))
-      .map(s => ({ count: statusCounts.get(s.id)!, color: s.color }));
+      .map(s => ({ count: statusCounts.get(s.id)!, color: s.color, label: s.label }));
     if (segments.length > 0) {
       result.set(folderPath, { segments });
     }

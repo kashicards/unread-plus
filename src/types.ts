@@ -35,7 +35,7 @@ export interface PluginData {
 }
 
 export interface FolderCount {
-  segments: Array<{ count: number; color: string }>;
+  segments: Array<{ count: number; color: string; label: string }>;
 }
 
 export const DEFAULT_STATUS_CONFIGS: StatusConfig[] = [

@@ -102,6 +102,7 @@ export class BadgeRenderer {
         const span = activeDocument.createElement('span');
         span.textContent = `${seg.count}●`;
         span.style.color = seg.color;
+        span.title = `${seg.count} ${seg.label}`;
         badge.appendChild(span);
       }
       titleEl.appendChild(badge);
