@@ -168,6 +168,19 @@ export class SettingsTab extends PluginSettingTab {
         this.plugin.stateManager.save().catch(() => {});
       });
 
+      // Icon input (free text/emoji, optional — falls back to the color dot)
+      const iconInput = row.createEl('input', { type: 'text', cls: 'unread-plus-icon-input' });
+      iconInput.value = config.icon ?? '';
+      iconInput.placeholder = '●';
+      iconInput.maxLength = 4;
+      iconInput.addEventListener('change', () => {
+        const icon = iconInput.value.trim();
+        configs[i] = { ...configs[i], icon: icon || undefined };
+        this.plugin.stateManager.updateStatusConfigs([...configs]);
+        this.plugin.stateManager.save().catch(() => {});
+        this.plugin.badgeRenderer.refresh();
+      });
+
       // Counts as open toggle
       const toggleLabel = row.createEl('label', { cls: 'unread-plus-toggle-label' });
       const toggleInput = toggleLabel.createEl('input', { type: 'checkbox' });

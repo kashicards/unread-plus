@@ -330,7 +330,7 @@ function computeFolderCounts(fileStatuses, statusConfigs) {
   }
   const result = /* @__PURE__ */ new Map();
   for (const [folderPath, statusCounts] of folderStatusCounts) {
-    const segments = statusConfigs.filter((s) => s.countsAsOpen && statusCounts.has(s.id)).map((s) => ({ count: statusCounts.get(s.id), color: s.color, label: s.label }));
+    const segments = statusConfigs.filter((s) => s.countsAsOpen && statusCounts.has(s.id)).map((s) => ({ count: statusCounts.get(s.id), color: s.color, label: s.label, icon: s.icon }));
     if (segments.length > 0) {
       result.set(folderPath, { segments });
     }
@@ -396,6 +396,10 @@ var BadgeRenderer = class {
       dot.className = "unread-plus-dot";
       dot.setAttribute("data-status", status.statusId);
       dot.style.setProperty("--dot-color", config.color);
+      if (config.icon) {
+        dot.addClass("unread-plus-dot--custom-icon");
+        dot.textContent = config.icon;
+      }
       if (settings.dotAging) {
         const ageDays = (Date.now() - status.markedAt) / 864e5;
         dot.style.opacity = String(Math.max(1 - ageDays * 0.1, 0.4).toFixed(2));
@@ -415,6 +419,7 @@ var BadgeRenderer = class {
     );
     const folderCounts = computeFolderCounts(activeStatuses, this.stateManager.getStatusConfigs());
     container.querySelectorAll(".nav-folder-title[data-path]").forEach((titleEl) => {
+      var _a;
       const path = titleEl.getAttribute("data-path");
       if (!path) return;
       const count = folderCounts.get(path);
@@ -423,7 +428,7 @@ var BadgeRenderer = class {
       badge.className = "unread-plus-folder-badge";
       for (const seg of count.segments) {
         const span = activeDocument.createElement("span");
-        span.textContent = `${seg.count}\u25CF`;
+        span.textContent = `${seg.count}${(_a = seg.icon) != null ? _a : "\u25CF"}`;
         span.style.color = seg.color;
         span.title = `${seg.count} ${seg.label}`;
         badge.appendChild(span);
@@ -572,6 +577,7 @@ var SettingsTab = class extends import_obsidian2.PluginSettingTab {
     );
   }
   renderStatusList(listEl) {
+    var _a;
     const configs = this.plugin.stateManager.getStatusConfigs();
     for (let i = 0; i < configs.length; i++) {
       const config = configs[i];
@@ -593,6 +599,18 @@ var SettingsTab = class extends import_obsidian2.PluginSettingTab {
         this.plugin.stateManager.updateStatusConfigs([...configs]);
         this.plugin.stateManager.save().catch(() => {
         });
+      });
+      const iconInput = row.createEl("input", { type: "text", cls: "unread-plus-icon-input" });
+      iconInput.value = (_a = config.icon) != null ? _a : "";
+      iconInput.placeholder = "\u25CF";
+      iconInput.maxLength = 4;
+      iconInput.addEventListener("change", () => {
+        const icon = iconInput.value.trim();
+        configs[i] = { ...configs[i], icon: icon || void 0 };
+        this.plugin.stateManager.updateStatusConfigs([...configs]);
+        this.plugin.stateManager.save().catch(() => {
+        });
+        this.plugin.badgeRenderer.refresh();
       });
       const toggleLabel = row.createEl("label", { cls: "unread-plus-toggle-label" });
       const toggleInput = toggleLabel.createEl("input", { type: "checkbox" });
@@ -1233,6 +1251,7 @@ var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian5.Plugin 
     this.overviewRefreshCallbacks.forEach((cb) => cb());
   }
   updateStatusBar() {
+    var _a;
     const counts = this.stateManager.getOpenCounts();
     this.statusBarItem.empty();
     if (counts.length === 0) {
@@ -1243,7 +1262,7 @@ var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian5.Plugin 
     for (const { config, count } of counts) {
       const span = this.statusBarItem.createSpan({ cls: "unread-plus-status-bar-dot" });
       span.setCssStyles({ color: config.color });
-      span.textContent = `${count}\u25CF`;
+      span.textContent = `${count}${(_a = config.icon) != null ? _a : "\u25CF"}`;
     }
   }
   scheduleSnoozeWakeup() {

@@ -67,6 +67,11 @@ export class BadgeRenderer {
       dot.setAttribute('data-status', status.statusId);
       dot.style.setProperty('--dot-color', config.color);
 
+      if (config.icon) {
+        dot.addClass('unread-plus-dot--custom-icon');
+        dot.textContent = config.icon;
+      }
+
       if (settings.dotAging) {
         const ageDays = (Date.now() - status.markedAt) / 86_400_000;
         dot.style.opacity = String(Math.max(1 - ageDays * 0.1, 0.4).toFixed(2));
@@ -100,7 +105,7 @@ export class BadgeRenderer {
       badge.className = 'unread-plus-folder-badge';
       for (const seg of count.segments) {
         const span = activeDocument.createElement('span');
-        span.textContent = `${seg.count}●`;
+        span.textContent = `${seg.count}${seg.icon ?? '●'}`;
         span.style.color = seg.color;
         span.title = `${seg.count} ${seg.label}`;
         badge.appendChild(span);

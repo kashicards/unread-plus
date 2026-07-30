@@ -26,6 +26,10 @@
   font-size: 9px;
 }
 
+.unread-plus-dot--custom-icon::after {
+  content: none;
+}
+
 /* ── Folder badge — pushed to end of line ── */
 .nav-folder-title {
   display: flex;
@@ -78,6 +82,13 @@
 .unread-plus-status-row input[type='text'] {
   flex: 1;
   min-width: 80px;
+}
+
+.unread-plus-status-row input.unread-plus-icon-input {
+  flex: 0 0 40px;
+  min-width: 0;
+  width: 40px;
+  text-align: center;
 }
 
 .unread-plus-toggle-label {

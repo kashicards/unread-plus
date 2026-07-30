@@ -60,6 +60,21 @@ describe('computeFolderCounts', () => {
     expect(segs[1]).toMatchObject({ count: 2, color: '#FF8C00', label: 'Later' });
   });
 
+  it('passes through a custom icon when the status config has one', () => {
+    const configsWithIcon: StatusConfig[] = [
+      { id: 'unread', label: 'Unread', color: '#4285F4', countsAsOpen: true, icon: '🔵' },
+    ];
+    const statuses = makeStatuses([['Notes/a.md', 'unread']]);
+    const counts = computeFolderCounts(statuses, configsWithIcon);
+    expect(counts.get('Notes')?.segments[0]).toMatchObject({ icon: '🔵' });
+  });
+
+  it('leaves icon undefined when the status config has none', () => {
+    const statuses = makeStatuses([['Notes/a.md', 'unread']]);
+    const counts = computeFolderCounts(statuses, CONFIGS);
+    expect(counts.get('Notes')?.segments[0].icon).toBeUndefined();
+  });
+
   it('does not count root-level files (no parent folder)', () => {
     const statuses = makeStatuses([['root-file.md', 'unread']]);
     const counts = computeFolderCounts(statuses, CONFIGS);

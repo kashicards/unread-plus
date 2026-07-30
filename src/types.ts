@@ -9,6 +9,7 @@ export interface StatusConfig {
   label: string;
   color: string;
   countsAsOpen: boolean;
+  icon?: string;
 }
 
 export interface UnreadPlusSettings {
@@ -35,7 +36,7 @@ export interface PluginData {
 }
 
 export interface FolderCount {
-  segments: Array<{ count: number; color: string; label: string }>;
+  segments: Array<{ count: number; color: string; label: string; icon?: string }>;
 }
 
 export const DEFAULT_STATUS_CONFIGS: StatusConfig[] = [

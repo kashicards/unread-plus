@@ -439,7 +439,7 @@ export default class UnreadPlusPlugin extends Plugin {
     for (const { config, count } of counts) {
       const span = this.statusBarItem.createSpan({ cls: 'unread-plus-status-bar-dot' });
       span.setCssStyles({ color: config.color });
-      span.textContent = `${count}●`;
+      span.textContent = `${count}${config.icon ?? '●'}`;
     }
   }
 
