@@ -397,6 +397,7 @@ export default class UnreadPlusPlugin extends Plugin {
     this.addCommand({
       id: 'open-next-unread',
       name: 'Open next unread',
+      hotkeys: [{ modifiers: ['Mod', 'Shift'], key: 'U' }],
       callback: () => {
         if (!this.reviewMode.isActive()) this.reviewMode.start(this.stateManager);
         void this.reviewMode.next(this.app, this.stateManager, this);
@@ -409,16 +410,6 @@ export default class UnreadPlusPlugin extends Plugin {
       callback: () => {
         this.reviewMode.start(this.stateManager);
         void this.reviewMode.next(this.app, this.stateManager, this);
-      },
-    });
-
-    this.addCommand({
-      id: 'next-review',
-      name: 'Next in review',
-      checkCallback: (checking: boolean) => {
-        if (!this.reviewMode.isActive()) return false;
-        if (!checking) void this.reviewMode.next(this.app, this.stateManager, this);
-        return true;
       },
     });
 

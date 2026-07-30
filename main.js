@@ -1402,6 +1402,7 @@ var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian7.Plugin 
     this.addCommand({
       id: "open-next-unread",
       name: "Open next unread",
+      hotkeys: [{ modifiers: ["Mod", "Shift"], key: "U" }],
       callback: () => {
         if (!this.reviewMode.isActive()) this.reviewMode.start(this.stateManager);
         void this.reviewMode.next(this.app, this.stateManager, this);
@@ -1413,15 +1414,6 @@ var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian7.Plugin 
       callback: () => {
         this.reviewMode.start(this.stateManager);
         void this.reviewMode.next(this.app, this.stateManager, this);
-      }
-    });
-    this.addCommand({
-      id: "next-review",
-      name: "Next in review",
-      checkCallback: (checking) => {
-        if (!this.reviewMode.isActive()) return false;
-        if (!checking) void this.reviewMode.next(this.app, this.stateManager, this);
-        return true;
       }
     });
     this.addCommand({
