@@ -543,6 +543,7 @@ var SettingsTab = class extends import_obsidian3.PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
     this.renderGeneralSection(containerEl);
+    this.renderAutoMarkSection(containerEl);
     this.renderIgnoreSection(containerEl);
     this.renderStatusSection(containerEl);
     this.renderReviewSection(containerEl);
@@ -550,15 +551,6 @@ var SettingsTab = class extends import_obsidian3.PluginSettingTab {
     this.renderResetSection(containerEl);
   }
   renderGeneralSection(el) {
-    new import_obsidian3.Setting(el).setName("Auto-read delay (seconds)").setDesc("Applies everywhere: mark ANY file as read after it has been open this many seconds \u2014 normal browsing, not just the review queue below. Set 0 to disable.").addText((text) => {
-      text.setValue(String(this.plugin.stateManager.getSettings().autoReadSeconds)).onChange(async (value) => {
-        const n = parseInt(value, 10);
-        if (!isNaN(n) && n >= 0) {
-          this.plugin.stateManager.updateSettings({ autoReadSeconds: n });
-          await this.plugin.stateManager.save();
-        }
-      });
-    });
     new import_obsidian3.Setting(el).setName("New file grace period (seconds)").setDesc("How long after creating a file to watch whether it becomes the active file, before marking it unread. Increase if you see false unread marks when creating and leaving files very quickly. Max 10.").addText((text) => {
       text.setValue(String(this.plugin.stateManager.getSettings().newFileGraceSeconds)).onChange(async (value) => {
         const n = parseInt(value, 10);
@@ -580,6 +572,31 @@ var SettingsTab = class extends import_obsidian3.PluginSettingTab {
         this.plugin.stateManager.updateSettings({ dotAging: value });
         await this.plugin.stateManager.save();
         this.plugin.badgeRenderer.refresh();
+      });
+    });
+  }
+  renderAutoMarkSection(el) {
+    new import_obsidian3.Setting(el).setName("Auto-mark as read").setHeading();
+    el.createEl("p", {
+      text: "Two independent timers for automatically clearing a file's status \u2014 one for everyday browsing, one only while stepping through the review queue.",
+      cls: "setting-item-description"
+    });
+    new import_obsidian3.Setting(el).setName("Everywhere (seconds)").setDesc("Mark ANY file as read after it has been open this many seconds \u2014 applies during normal browsing too, not just the review queue. Set 0 to disable.").addText((text) => {
+      text.setValue(String(this.plugin.stateManager.getSettings().autoReadSeconds)).onChange(async (value) => {
+        const n = parseInt(value, 10);
+        if (!isNaN(n) && n >= 0) {
+          this.plugin.stateManager.updateSettings({ autoReadSeconds: n });
+          await this.plugin.stateManager.save();
+        }
+      });
+    });
+    new import_obsidian3.Setting(el).setName("During review queue only (seconds)").setDesc("While stepping through the review queue with Next/Previous in review, auto-clear each file's status after this many seconds. 0 = off.").addText((text) => {
+      text.setValue(String(this.plugin.stateManager.getSettings().reviewAutoMarkSeconds)).onChange(async (value) => {
+        const n = parseInt(value, 10);
+        if (!isNaN(n) && n >= 0) {
+          this.plugin.stateManager.updateSettings({ reviewAutoMarkSeconds: n });
+          await this.plugin.stateManager.save();
+        }
       });
     });
   }
@@ -765,15 +782,6 @@ var SettingsTab = class extends import_obsidian3.PluginSettingTab {
           reviewOrder: value
         });
         await this.plugin.stateManager.save();
-      });
-    });
-    new import_obsidian3.Setting(el).setName("Auto-mark as read during queue (seconds)").setDesc(`Applies only here: while stepping through the review queue with Next/Previous in review, auto-clear each file's status after this many seconds. Independent from "Auto-read delay" above, which applies to normal browsing. 0 = off.`).addText((text) => {
-      text.setValue(String(this.plugin.stateManager.getSettings().reviewAutoMarkSeconds)).onChange(async (value) => {
-        const n = parseInt(value, 10);
-        if (!isNaN(n) && n >= 0) {
-          this.plugin.stateManager.updateSettings({ reviewAutoMarkSeconds: n });
-          await this.plugin.stateManager.save();
-        }
       });
     });
   }
