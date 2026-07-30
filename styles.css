@@ -87,3 +87,56 @@
   white-space: nowrap;
   font-size: 12px;
 }
+
+/* ── Unread overview codeblock ── */
+.unread-plus-overview {
+  font-size: 13px;
+}
+
+.unread-plus-overview-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.unread-plus-overview-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 500;
+}
+
+.unread-plus-overview-dot::before {
+  content: '●';
+  font-size: 10px;
+}
+
+.unread-plus-overview-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.unread-plus-overview-list li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.unread-plus-overview-link {
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.unread-plus-overview-link:hover {
+  text-decoration: underline;
+}
+
+.unread-plus-overview-empty {
+  opacity: 0.7;
+  font-style: italic;
+}

@@ -1,5 +1,6 @@
 import { App, Notice, TFile } from 'obsidian';
 import { StateManager } from './state-manager';
+import { sortEntries } from './sort-entries';
 import type UnreadPlusPlugin from '../main';
 
 export class ReviewMode {
@@ -21,17 +22,7 @@ export class ReviewMode {
 
     let entries = Object.entries(statuses).filter(([, s]) => openIds.has(s.statusId));
 
-    if (settings.reviewOrder === 'created') {
-      entries.sort((a, b) => a[1].markedAt - b[1].markedAt);
-    } else if (settings.reviewOrder === 'folder') {
-      entries.sort((a, b) => a[0].localeCompare(b[0]));
-    } else {
-      // random
-      for (let i = entries.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [entries[i], entries[j]] = [entries[j], entries[i]];
-      }
-    }
+    entries = sortEntries(entries, settings.reviewOrder);
 
     this.queue = entries.map(([path]) => path);
     this.index = -1;

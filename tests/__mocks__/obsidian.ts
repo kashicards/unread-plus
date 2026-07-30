@@ -29,3 +29,17 @@ export class Menu {
   addItem(_cb: any) { return this; }
   addSeparator() { return this; }
 }
+export class MarkdownRenderChild {
+  containerEl: HTMLElement;
+  constructor(containerEl: HTMLElement) {
+    this.containerEl = containerEl;
+  }
+  onload(): void {}
+  onunload(): void {}
+  load(): void {
+    this.onload();
+  }
+  unload(): void {
+    this.onunload();
+  }
+}

@@ -3,6 +3,8 @@ import { StateManager } from './src/state-manager';
 import { BadgeRenderer } from './src/badge-renderer';
 import { SettingsTab } from './src/settings-tab';
 import { ReviewMode } from './src/review-mode';
+import { OverviewBlockChild } from './src/overview-block';
+import { parseOverviewParams } from './src/overview-params';
 
 export default class UnreadPlusPlugin extends Plugin {
   stateManager!: StateManager;
@@ -18,6 +20,7 @@ export default class UnreadPlusPlugin extends Plugin {
   // auto-mark — opening it is proof the user created it themselves.
   private pendingAutoUnread = new Map<string, number>();
   private pendingGraceChecks = new Map<string, { timeoutId: number; deadline: number }>();
+  private overviewRefreshCallbacks = new Set<() => void>();
   private static readonly GRACE_POLL_INTERVAL_MS = 100;
   private isLayoutReady = false;
   private statusBarItem!: HTMLElement;
@@ -38,6 +41,13 @@ export default class UnreadPlusPlugin extends Plugin {
     this.registerContextMenu();
 
     this.addSettingTab(new SettingsTab(this.app, this));
+
+    this.registerMarkdownCodeBlockProcessor('unread-overview', (source, el, ctx) => {
+      const knownStatusIds = this.stateManager.getStatusConfigs().map(c => c.id);
+      const params = parseOverviewParams(source, knownStatusIds);
+      const child = new OverviewBlockChild(el, this.app, this.stateManager, this, params);
+      ctx.addChild(child);
+    });
   }
 
   onunload(): void {
@@ -404,9 +414,18 @@ export default class UnreadPlusPlugin extends Plugin {
     });
   }
 
+  registerOverviewRefresh(cb: () => void): void {
+    this.overviewRefreshCallbacks.add(cb);
+  }
+
+  unregisterOverviewRefresh(cb: () => void): void {
+    this.overviewRefreshCallbacks.delete(cb);
+  }
+
   private refreshUI(): void {
     this.badgeRenderer.refresh();
     this.updateStatusBar();
+    this.overviewRefreshCallbacks.forEach(cb => cb());
   }
 
   private updateStatusBar(): void {

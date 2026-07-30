@@ -23,7 +23,7 @@ __export(main_exports, {
   default: () => UnreadPlusPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian3 = require("obsidian");
+var import_obsidian4 = require("obsidian");
 
 // src/types.ts
 var DEFAULT_STATUS_CONFIGS = [
@@ -621,6 +621,24 @@ var SettingsTab = class extends import_obsidian.PluginSettingTab {
 
 // src/review-mode.ts
 var import_obsidian2 = require("obsidian");
+
+// src/sort-entries.ts
+function sortEntries(entries, order) {
+  const copy = [...entries];
+  if (order === "created") {
+    copy.sort((a, b) => a[1].markedAt - b[1].markedAt);
+  } else if (order === "folder") {
+    copy.sort((a, b) => a[0].localeCompare(b[0]));
+  } else {
+    for (let i = copy.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+  }
+  return copy;
+}
+
+// src/review-mode.ts
 var ReviewMode = class {
   constructor() {
     this.queue = [];
@@ -638,16 +656,7 @@ var ReviewMode = class {
       stateManager.getStatusConfigs().filter((c) => c.countsAsOpen).map((c) => c.id)
     );
     let entries = Object.entries(statuses).filter(([, s]) => openIds.has(s.statusId));
-    if (settings.reviewOrder === "created") {
-      entries.sort((a, b) => a[1].markedAt - b[1].markedAt);
-    } else if (settings.reviewOrder === "folder") {
-      entries.sort((a, b) => a[0].localeCompare(b[0]));
-    } else {
-      for (let i = entries.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [entries[i], entries[j]] = [entries[j], entries[i]];
-      }
-    }
+    entries = sortEntries(entries, settings.reviewOrder);
     this.queue = entries.map(([path]) => path);
     this.index = -1;
     this.active = this.queue.length > 0;
@@ -692,8 +701,127 @@ var ReviewMode = class {
   }
 };
 
+// src/overview-block.ts
+var import_obsidian3 = require("obsidian");
+
+// src/overview-data.ts
+function selectOverviewEntries(fileStatuses, isSnoozed, params, allowedStatusIds) {
+  const entries = Object.entries(fileStatuses).filter(([path, status]) => {
+    if (isSnoozed(path)) return false;
+    if (!allowedStatusIds.has(status.statusId)) return false;
+    if (params.folder && !(path === params.folder || path.startsWith(params.folder + "/"))) return false;
+    return true;
+  });
+  return sortEntries(entries, params.sort);
+}
+function computeOverviewStats(entries, statusConfigs) {
+  var _a;
+  const counts = /* @__PURE__ */ new Map();
+  for (const [, status] of entries) {
+    counts.set(status.statusId, ((_a = counts.get(status.statusId)) != null ? _a : 0) + 1);
+  }
+  return statusConfigs.filter((c) => counts.has(c.id)).map((c) => ({ config: c, count: counts.get(c.id) }));
+}
+
+// src/overview-block.ts
+var OverviewBlockChild = class extends import_obsidian3.MarkdownRenderChild {
+  constructor(containerEl, app, stateManager, plugin, params) {
+    super(containerEl);
+    this.app = app;
+    this.stateManager = stateManager;
+    this.plugin = plugin;
+    this.params = params;
+    this.refresh = () => {
+      this.render();
+    };
+  }
+  onload() {
+    this.render();
+    this.plugin.registerOverviewRefresh(this.refresh);
+  }
+  onunload() {
+    this.plugin.unregisterOverviewRefresh(this.refresh);
+  }
+  render() {
+    var _a;
+    const { containerEl, stateManager, params } = this;
+    containerEl.empty();
+    containerEl.addClass("unread-plus-overview");
+    const configs = stateManager.getStatusConfigs();
+    const openConfigIds = configs.filter((c) => c.countsAsOpen).map((c) => c.id);
+    const allowedStatusIds = new Set((_a = params.statusIds) != null ? _a : openConfigIds);
+    const entries = selectOverviewEntries(
+      stateManager.getAllFileStatuses(),
+      (path) => stateManager.isSnoozed(path),
+      params,
+      allowedStatusIds
+    );
+    if (params.showStats) {
+      this.renderStats(entries, configs);
+    }
+    if (params.showList) {
+      this.renderList(entries.slice(0, params.limit));
+    }
+    if (entries.length === 0) {
+      containerEl.createDiv({ cls: "unread-plus-overview-empty", text: "All clear \u2713" });
+    }
+  }
+  renderStats(entries, configs) {
+    const stats = computeOverviewStats(entries, configs);
+    if (stats.length === 0) return;
+    const statsEl = this.containerEl.createDiv({ cls: "unread-plus-overview-stats" });
+    for (const { config, count } of stats) {
+      const chip = statsEl.createSpan({ cls: "unread-plus-overview-chip" });
+      const dot = chip.createSpan({ cls: "unread-plus-overview-dot" });
+      dot.setCssStyles({ color: config.color });
+      chip.createSpan({ text: ` ${count} ${config.label}` });
+    }
+  }
+  renderList(entries) {
+    if (entries.length === 0) return;
+    const listEl = this.containerEl.createEl("ul", { cls: "unread-plus-overview-list" });
+    for (const [path, status] of entries) {
+      const config = this.stateManager.getStatusConfig(status.statusId);
+      const item = listEl.createEl("li");
+      const dot = item.createSpan({ cls: "unread-plus-overview-dot" });
+      if (config) dot.setCssStyles({ color: config.color });
+      const link = item.createEl("a", { text: path, cls: "unread-plus-overview-link" });
+      link.addEventListener("click", (evt) => {
+        evt.preventDefault();
+        const file = this.app.vault.getAbstractFileByPath(path);
+        if (file instanceof import_obsidian3.TFile) {
+          void this.app.workspace.getLeaf(false).openFile(file);
+        }
+      });
+    }
+  }
+};
+
+// src/overview-params.ts
+function parseOverviewParams(source, knownStatusIds) {
+  const raw = {};
+  for (const line of source.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const idx = trimmed.indexOf(":");
+    if (idx === -1) continue;
+    const key = trimmed.slice(0, idx).trim();
+    const value = trimmed.slice(idx + 1).trim();
+    raw[key] = value;
+  }
+  const statusIds = raw.status ? raw.status.split(",").map((s) => s.trim()).filter((s) => knownStatusIds.includes(s)) : null;
+  const folder = raw.folder ? raw.folder : null;
+  const parsedLimit = raw.limit ? parseInt(raw.limit, 10) : NaN;
+  const limit = !isNaN(parsedLimit) ? parsedLimit : 20;
+  const sort = raw.sort === "folder" ? "folder" : raw.sort === "random" ? "random" : "created";
+  const showValues = raw.show ? raw.show.split(",").map((s) => s.trim()) : ["stats", "list"];
+  const showStats = showValues.includes("stats");
+  const showList = showValues.includes("list");
+  return { statusIds, folder, limit, sort, showStats, showList };
+}
+
 // main.ts
-var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian3.Plugin {
+var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian4.Plugin {
   constructor() {
     super(...arguments);
     this.autoReadTimers = /* @__PURE__ */ new Map();
@@ -705,6 +833,7 @@ var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian3.Plugin 
     // auto-mark — opening it is proof the user created it themselves.
     this.pendingAutoUnread = /* @__PURE__ */ new Map();
     this.pendingGraceChecks = /* @__PURE__ */ new Map();
+    this.overviewRefreshCallbacks = /* @__PURE__ */ new Set();
     this.isLayoutReady = false;
     this.snoozeWakeupTimer = null;
   }
@@ -720,6 +849,12 @@ var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian3.Plugin 
     this.registerCommands();
     this.registerContextMenu();
     this.addSettingTab(new SettingsTab(this.app, this));
+    this.registerMarkdownCodeBlockProcessor("unread-overview", (source, el, ctx) => {
+      const knownStatusIds = this.stateManager.getStatusConfigs().map((c) => c.id);
+      const params = parseOverviewParams(source, knownStatusIds);
+      const child = new OverviewBlockChild(el, this.app, this.stateManager, this, params);
+      ctx.addChild(child);
+    });
   }
   onunload() {
     this.reviewMode.stop();
@@ -740,7 +875,7 @@ var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian3.Plugin 
   getOpenFilePaths() {
     const paths = /* @__PURE__ */ new Set();
     this.app.workspace.iterateAllLeaves((leaf) => {
-      if (leaf.view instanceof import_obsidian3.FileView && leaf.view.file) {
+      if (leaf.view instanceof import_obsidian4.FileView && leaf.view.file) {
         paths.add(leaf.view.file.path);
       }
     });
@@ -809,7 +944,7 @@ var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian3.Plugin 
     window.setTimeout(() => this.refreshUI(), 150);
   }
   onFileCreated(file) {
-    if (!(file instanceof import_obsidian3.TFile)) return;
+    if (!(file instanceof import_obsidian4.TFile)) return;
     if (this.stateManager.isIgnored(file.path)) return;
     if (this.wasOpenedThisSession(file.path)) return;
     if (this.stateManager.isExplicitlyRead(file.path)) return;
@@ -1032,9 +1167,16 @@ var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian3.Plugin 
       }
     });
   }
+  registerOverviewRefresh(cb) {
+    this.overviewRefreshCallbacks.add(cb);
+  }
+  unregisterOverviewRefresh(cb) {
+    this.overviewRefreshCallbacks.delete(cb);
+  }
   refreshUI() {
     this.badgeRenderer.refresh();
     this.updateStatusBar();
+    this.overviewRefreshCallbacks.forEach((cb) => cb());
   }
   updateStatusBar() {
     const counts = this.stateManager.getOpenCounts();
@@ -1073,7 +1215,7 @@ var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian3.Plugin 
     this.registerEvent(
       this.app.workspace.on("files-menu", (menu, files) => {
         const selectedFiles = files.filter(
-          (file) => file instanceof import_obsidian3.TFile && !this.stateManager.isIgnored(file.path)
+          (file) => file instanceof import_obsidian4.TFile && !this.stateManager.isIgnored(file.path)
         );
         if (selectedFiles.length === 0) return;
         const unreadConfig = this.stateManager.getStatusConfig("unread");
@@ -1096,7 +1238,7 @@ var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian3.Plugin 
     );
     this.registerEvent(
       this.app.workspace.on("file-menu", (menu, file) => {
-        if (!(file instanceof import_obsidian3.TFile)) return;
+        if (!(file instanceof import_obsidian4.TFile)) return;
         const configs = this.stateManager.getStatusConfigs();
         const current = this.stateManager.getStatus(file.path);
         menu.addSeparator();
