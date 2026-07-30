@@ -5,6 +5,7 @@ import { SettingsTab } from './src/settings-tab';
 import { ReviewMode } from './src/review-mode';
 import { OverviewBlockChild } from './src/overview-block';
 import { parseOverviewParams } from './src/overview-params';
+import { OnboardingModal } from './src/onboarding-modal';
 
 export default class UnreadPlusPlugin extends Plugin {
   stateManager!: StateManager;
@@ -90,6 +91,7 @@ export default class UnreadPlusPlugin extends Plugin {
       // Capture files already open at startup in case file-open fired before our listener registered.
       for (const path of this.getOpenFilePaths()) this.sessionOpenedPaths.add(path);
       this.detectOfflineCreations();
+      this.maybeShowOnboarding();
     });
 
     this.registerEvent(
@@ -110,6 +112,13 @@ export default class UnreadPlusPlugin extends Plugin {
     this.registerEvent(
       this.app.workspace.on('file-open', (file: TFile | null) => this.onFileOpen(file))
     );
+  }
+
+  private maybeShowOnboarding(): void {
+    if (this.stateManager.hasSeenOnboarding()) return;
+    this.stateManager.markOnboardingSeen();
+    this.stateManager.scheduleSave();
+    new OnboardingModal(this.app).open();
   }
 
   private detectOfflineCreations(): void {

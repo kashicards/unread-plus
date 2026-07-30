@@ -22,6 +22,9 @@ export class StateManager {
       readPaths: saved.readPaths ?? [],
       lastOpenPaths: saved.lastOpenPaths ?? [],
       movedPaths: saved.movedPaths ?? [],
+      // Any pre-existing saved data means this is an upgrade, not a fresh
+      // install — don't retroactively show onboarding to existing users.
+      onboardingShown: saved.onboardingShown ?? true,
     };
     this.migrate();
   }
@@ -264,6 +267,16 @@ export class StateManager {
     const paths = this.data.movedPaths ?? [];
     this.data.movedPaths = [];
     return paths;
+  }
+
+  // --- Onboarding ---
+
+  hasSeenOnboarding(): boolean {
+    return this.data.onboardingShown;
+  }
+
+  markOnboardingSeen(): void {
+    this.data.onboardingShown = true;
   }
 
   // --- Status configs ---

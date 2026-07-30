@@ -33,6 +33,7 @@ export interface PluginData {
   readPaths: string[];       // explicitly marked read by the user
   lastOpenPaths: string[];   // open in a leaf at last shutdown — exempt from offline-modification check
   movedPaths: string[];      // renamed/moved paths this session — consumed at next startup
+  onboardingShown: boolean;  // whether the first-launch onboarding modal has been shown
 }
 
 export interface FolderCount {
@@ -65,4 +66,5 @@ export const DEFAULT_DATA: PluginData = {
   readPaths: [],
   lastOpenPaths: [],
   movedPaths: [],
+  onboardingShown: false,
 };

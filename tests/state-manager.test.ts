@@ -126,4 +126,23 @@ describe('StateManager', () => {
     await legacy.load();
     expect(legacy.getSettings().newFileGraceSeconds).toBe(2);
   });
+
+  it('has not seen onboarding on a genuinely fresh install (loadData returns null)', () => {
+    expect(sm.hasSeenOnboarding()).toBe(false);
+  });
+
+  it('marks onboarding as seen', () => {
+    sm.markOnboardingSeen();
+    expect(sm.hasSeenOnboarding()).toBe(true);
+  });
+
+  it('treats existing saved data without an onboardingShown field as already seen (upgrade case)', async () => {
+    const mockPlugin = {
+      loadData: async () => ({ version: 4, fileStatuses: { 'a.md': { statusId: 'unread', markedAt: 1 } } }),
+      saveData: async () => {},
+    } as any;
+    const existing = new StateManager(mockPlugin);
+    await existing.load();
+    expect(existing.hasSeenOnboarding()).toBe(true);
+  });
 });

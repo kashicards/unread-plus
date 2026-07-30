@@ -23,7 +23,7 @@ __export(main_exports, {
   default: () => UnreadPlusPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian5 = require("obsidian");
+var import_obsidian6 = require("obsidian");
 
 // src/types.ts
 var DEFAULT_STATUS_CONFIGS = [
@@ -49,7 +49,8 @@ var DEFAULT_DATA = {
   lastCloseTime: 0,
   readPaths: [],
   lastOpenPaths: [],
-  movedPaths: []
+  movedPaths: [],
+  onboardingShown: false
 };
 
 // src/state-manager.ts
@@ -60,7 +61,7 @@ var StateManager = class {
     this.saveTimer = null;
   }
   async load() {
-    var _a, _b, _c, _d, _e, _f, _g;
+    var _a, _b, _c, _d, _e, _f, _g, _h;
     const saved = await this.plugin.loadData();
     if (!saved) return;
     this.data = {
@@ -73,7 +74,10 @@ var StateManager = class {
       lastCloseTime: (_d = saved.lastCloseTime) != null ? _d : 0,
       readPaths: (_e = saved.readPaths) != null ? _e : [],
       lastOpenPaths: (_f = saved.lastOpenPaths) != null ? _f : [],
-      movedPaths: (_g = saved.movedPaths) != null ? _g : []
+      movedPaths: (_g = saved.movedPaths) != null ? _g : [],
+      // Any pre-existing saved data means this is an upgrade, not a fresh
+      // install — don't retroactively show onboarding to existing users.
+      onboardingShown: (_h = saved.onboardingShown) != null ? _h : true
     };
     this.migrate();
   }
@@ -280,6 +284,13 @@ var StateManager = class {
     const paths = (_a = this.data.movedPaths) != null ? _a : [];
     this.data.movedPaths = [];
     return paths;
+  }
+  // --- Onboarding ---
+  hasSeenOnboarding() {
+    return this.data.onboardingShown;
+  }
+  markOnboardingSeen() {
+    this.data.onboardingShown = true;
   }
   // --- Status configs ---
   getStatusConfigs() {
@@ -981,8 +992,31 @@ function parseOverviewParams(source, knownStatusIds) {
   return { statusIds, folder, limit, sort, showStats, showList };
 }
 
+// src/onboarding-modal.ts
+var import_obsidian5 = require("obsidian");
+var OnboardingModal = class extends import_obsidian5.Modal {
+  onOpen() {
+    const { contentEl } = this;
+    contentEl.createEl("h2", { text: "Welcome to Unread+" });
+    contentEl.createEl("p", {
+      text: "Colored dots next to file names mark their status (default: unread). Right-click a file to change or clear its status."
+    });
+    contentEl.createEl("p", {
+      text: "Numbers next to folder names show how many files inside have an open status."
+    });
+    contentEl.createEl("p", {
+      text: "Open Settings \u2192 Unread+ to customize statuses, colors, and behavior."
+    });
+    const okBtn = contentEl.createEl("button", { text: "Got it" });
+    okBtn.addEventListener("click", () => this.close());
+  }
+  onClose() {
+    this.contentEl.empty();
+  }
+};
+
 // main.ts
-var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian5.Plugin {
+var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian6.Plugin {
   constructor() {
     super(...arguments);
     this.autoReadTimers = /* @__PURE__ */ new Map();
@@ -1036,7 +1070,7 @@ var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian5.Plugin 
   getOpenFilePaths() {
     const paths = /* @__PURE__ */ new Set();
     this.app.workspace.iterateAllLeaves((leaf) => {
-      if (leaf.view instanceof import_obsidian5.FileView && leaf.view.file) {
+      if (leaf.view instanceof import_obsidian6.FileView && leaf.view.file) {
         paths.add(leaf.view.file.path);
       }
     });
@@ -1053,6 +1087,7 @@ var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian5.Plugin 
       this.isLayoutReady = true;
       for (const path of this.getOpenFilePaths()) this.sessionOpenedPaths.add(path);
       this.detectOfflineCreations();
+      this.maybeShowOnboarding();
     });
     this.registerEvent(
       this.app.vault.on(
@@ -1071,6 +1106,12 @@ var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian5.Plugin 
     this.registerEvent(
       this.app.workspace.on("file-open", (file) => this.onFileOpen(file))
     );
+  }
+  maybeShowOnboarding() {
+    if (this.stateManager.hasSeenOnboarding()) return;
+    this.stateManager.markOnboardingSeen();
+    this.stateManager.scheduleSave();
+    new OnboardingModal(this.app).open();
   }
   detectOfflineCreations() {
     this.stateManager.clearExpiredSnoozes();
@@ -1105,7 +1146,7 @@ var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian5.Plugin 
     window.setTimeout(() => this.refreshUI(), 150);
   }
   onFileCreated(file) {
-    if (!(file instanceof import_obsidian5.TFile)) return;
+    if (!(file instanceof import_obsidian6.TFile)) return;
     if (this.stateManager.isIgnored(file.path)) return;
     if (this.wasOpenedThisSession(file.path)) return;
     if (this.stateManager.isExplicitlyRead(file.path)) return;
@@ -1386,7 +1427,7 @@ var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian5.Plugin 
     this.registerEvent(
       this.app.workspace.on("files-menu", (menu, files) => {
         const selectedFiles = files.filter(
-          (file) => file instanceof import_obsidian5.TFile && !this.stateManager.isIgnored(file.path)
+          (file) => file instanceof import_obsidian6.TFile && !this.stateManager.isIgnored(file.path)
         );
         if (selectedFiles.length === 0) return;
         const unreadConfig = this.stateManager.getStatusConfig("unread");
@@ -1409,7 +1450,7 @@ var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian5.Plugin 
     );
     this.registerEvent(
       this.app.workspace.on("file-menu", (menu, file) => {
-        if (!(file instanceof import_obsidian5.TFile)) return;
+        if (!(file instanceof import_obsidian6.TFile)) return;
         const configs = this.stateManager.getStatusConfigs();
         const current = this.stateManager.getStatus(file.path);
         menu.addSeparator();
