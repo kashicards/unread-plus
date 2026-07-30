@@ -1,5 +1,7 @@
 import { App, Notice, PluginSettingTab, Setting } from 'obsidian';
 import type UnreadPlusPlugin from '../main';
+import { ConfirmModal } from './confirm-modal';
+import { DEFAULT_SETTINGS, DEFAULT_STATUS_CONFIGS } from './types';
 
 export class SettingsTab extends PluginSettingTab {
   constructor(app: App, private plugin: UnreadPlusPlugin) {
@@ -14,6 +16,7 @@ export class SettingsTab extends PluginSettingTab {
     this.renderIgnoreSection(containerEl);
     this.renderStatusSection(containerEl);
     this.renderReviewSection(containerEl);
+    this.renderResetSection(containerEl);
   }
 
   private renderGeneralSection(el: HTMLElement): void {
@@ -230,5 +233,31 @@ export class SettingsTab extends PluginSettingTab {
             }
           });
       });
+  }
+
+  private renderResetSection(el: HTMLElement): void {
+    new Setting(el).setName('Danger zone').setHeading();
+
+    new Setting(el)
+      .setName('Reset to defaults')
+      .setDesc('Resets all settings and statuses back to their defaults. This cannot be undone.')
+      .addButton(btn =>
+        btn
+          .setButtonText('Reset to defaults')
+          .setWarning()
+          .onClick(() => {
+            new ConfirmModal(
+              this.app,
+              'This will reset all settings and statuses to their defaults. Continue?',
+              async () => {
+                this.plugin.stateManager.updateSettings(structuredClone(DEFAULT_SETTINGS));
+                this.plugin.stateManager.updateStatusConfigs(structuredClone(DEFAULT_STATUS_CONFIGS));
+                await this.plugin.stateManager.save();
+                this.plugin.badgeRenderer.refresh();
+                this.display();
+              }
+            ).open();
+          })
+      );
   }
 }

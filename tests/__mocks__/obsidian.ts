@@ -32,6 +32,17 @@ export class Setting {
   addButton(_cb: any) { return this; }
   addColorPicker(_cb: any) { return this; }
 }
+export class Modal {
+  app: any;
+  contentEl: any = { createEl: () => ({}), createSpan: () => ({}), empty: () => {} };
+  constructor(app: any) {
+    this.app = app;
+  }
+  open(): void {}
+  close(): void {}
+  onOpen(): void {}
+  onClose(): void {}
+}
 export class Menu {
   addItem(_cb: any) { return this; }
   addSeparator() { return this; }
