@@ -816,23 +816,40 @@ var ReviewMode = class {
         new import_obsidian3.Notice("Unread+: All clear \u2713");
         return;
       }
-      const path = this.queue[this.index];
-      const file = app.vault.getAbstractFileByPath(path);
-      if (!(file instanceof import_obsidian3.TFile)) {
-        continue;
-      }
-      await app.workspace.getLeaf(false).openFile(file);
-      new import_obsidian3.Notice(`Unread+: ${this.index + 1} von ${this.queue.length}`);
-      const seconds = stateManager.getSettings().reviewAutoMarkSeconds;
-      if (seconds > 0) {
-        if (this.autoMarkTimer !== null) window.clearTimeout(this.autoMarkTimer);
-        this.autoMarkTimer = window.setTimeout(() => {
-          plugin.clearFileStatus(path);
-          this.autoMarkTimer = null;
-        }, seconds * 1e3);
-      }
-      return;
+      if (await this.tryOpenCurrent(app, stateManager, plugin)) return;
     }
+  }
+  async previous(app, stateManager, plugin) {
+    if (!this.active) return;
+    while (true) {
+      if (this.index <= 0) {
+        new import_obsidian3.Notice("Unread+: Already at the first file");
+        return;
+      }
+      this.index--;
+      if (await this.tryOpenCurrent(app, stateManager, plugin)) return;
+    }
+  }
+  // Opens the file at the current index and starts the auto-mark timer if
+  // configured. Returns false (without touching this.index) if the file at
+  // this index no longer exists, so next()/previous() can keep stepping.
+  async tryOpenCurrent(app, stateManager, plugin) {
+    const path = this.queue[this.index];
+    const file = app.vault.getAbstractFileByPath(path);
+    if (!(file instanceof import_obsidian3.TFile)) {
+      return false;
+    }
+    await app.workspace.getLeaf(false).openFile(file);
+    new import_obsidian3.Notice(`Unread+: ${this.index + 1} von ${this.queue.length}`);
+    const seconds = stateManager.getSettings().reviewAutoMarkSeconds;
+    if (seconds > 0) {
+      if (this.autoMarkTimer !== null) window.clearTimeout(this.autoMarkTimer);
+      this.autoMarkTimer = window.setTimeout(() => {
+        plugin.clearFileStatus(path);
+        this.autoMarkTimer = null;
+      }, seconds * 1e3);
+    }
+    return true;
   }
   stop() {
     if (this.autoMarkTimer !== null) {
@@ -1307,6 +1324,15 @@ var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian5.Plugin 
       checkCallback: (checking) => {
         if (!this.reviewMode.isActive()) return false;
         if (!checking) void this.reviewMode.next(this.app, this.stateManager, this);
+        return true;
+      }
+    });
+    this.addCommand({
+      id: "previous-review",
+      name: "Previous in review",
+      checkCallback: (checking) => {
+        if (!this.reviewMode.isActive()) return false;
+        if (!checking) void this.reviewMode.previous(this.app, this.stateManager, this);
         return true;
       }
     });

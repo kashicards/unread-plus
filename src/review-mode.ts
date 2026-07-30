@@ -45,27 +45,48 @@ export class ReviewMode {
         return;
       }
 
-      const path = this.queue[this.index];
-      const file = app.vault.getAbstractFileByPath(path);
-
-      if (!(file instanceof TFile)) {
-        continue; // skip deleted files, try next
-      }
-
-      await app.workspace.getLeaf(false).openFile(file);
-      new Notice(`Unread+: ${this.index + 1} von ${this.queue.length}`);
-
-      const seconds = stateManager.getSettings().reviewAutoMarkSeconds;
-      if (seconds > 0) {
-        if (this.autoMarkTimer !== null) window.clearTimeout(this.autoMarkTimer);
-        this.autoMarkTimer = window.setTimeout(() => {
-          plugin.clearFileStatus(path);
-          this.autoMarkTimer = null;
-        }, seconds * 1000);
-      }
-
-      return;
+      if (await this.tryOpenCurrent(app, stateManager, plugin)) return;
     }
+  }
+
+  async previous(app: App, stateManager: StateManager, plugin: UnreadPlusPlugin): Promise<void> {
+    if (!this.active) return;
+
+    while (true) {
+      if (this.index <= 0) {
+        new Notice('Unread+: Already at the first file');
+        return;
+      }
+      this.index--;
+
+      if (await this.tryOpenCurrent(app, stateManager, plugin)) return;
+    }
+  }
+
+  // Opens the file at the current index and starts the auto-mark timer if
+  // configured. Returns false (without touching this.index) if the file at
+  // this index no longer exists, so next()/previous() can keep stepping.
+  private async tryOpenCurrent(app: App, stateManager: StateManager, plugin: UnreadPlusPlugin): Promise<boolean> {
+    const path = this.queue[this.index];
+    const file = app.vault.getAbstractFileByPath(path);
+
+    if (!(file instanceof TFile)) {
+      return false; // skip deleted files, caller tries the next index
+    }
+
+    await app.workspace.getLeaf(false).openFile(file);
+    new Notice(`Unread+: ${this.index + 1} von ${this.queue.length}`);
+
+    const seconds = stateManager.getSettings().reviewAutoMarkSeconds;
+    if (seconds > 0) {
+      if (this.autoMarkTimer !== null) window.clearTimeout(this.autoMarkTimer);
+      this.autoMarkTimer = window.setTimeout(() => {
+        plugin.clearFileStatus(path);
+        this.autoMarkTimer = null;
+      }, seconds * 1000);
+    }
+
+    return true;
   }
 
   stop(): void {

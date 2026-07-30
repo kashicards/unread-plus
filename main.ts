@@ -412,6 +412,16 @@ export default class UnreadPlusPlugin extends Plugin {
         return true;
       },
     });
+
+    this.addCommand({
+      id: 'previous-review',
+      name: 'Previous in review',
+      checkCallback: (checking: boolean) => {
+        if (!this.reviewMode.isActive()) return false;
+        if (!checking) void this.reviewMode.previous(this.app, this.stateManager, this);
+        return true;
+      },
+    });
   }
 
   registerOverviewRefresh(cb: () => void): void {

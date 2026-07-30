@@ -99,3 +99,44 @@ describe('ReviewMode.next', () => {
     expect((Notice as any).lastMessage).toBe('Unread+: 2 von 2');
   });
 });
+
+describe('ReviewMode.previous', () => {
+  let sm: StateManager;
+  let review: ReviewMode;
+
+  beforeEach(async () => {
+    sm = makeManager();
+    await sm.load();
+    review = new ReviewMode();
+    (Notice as any).lastMessage = null;
+  });
+
+  it('moves back to the previous file', async () => {
+    sm.updateSettings({ reviewOrder: 'created' });
+    sm.setStatus('a.md', 'unread');
+    sm.setStatus('b.md', 'unread');
+    review.start(sm);
+
+    const app = makeApp(async () => {});
+    await review.next(app, sm, {} as any);
+    await review.next(app, sm, {} as any);
+    expect((Notice as any).lastMessage).toBe('Unread+: 2 von 2');
+
+    await review.previous(app, sm, {} as any);
+
+    expect((Notice as any).lastMessage).toBe('Unread+: 1 von 2');
+  });
+
+  it('shows a notice and stays put when already at the first file', async () => {
+    sm.setStatus('a.md', 'unread');
+    review.start(sm);
+
+    const app = makeApp(async () => {});
+    await review.next(app, sm, {} as any);
+    expect((Notice as any).lastMessage).toBe('Unread+: 1 von 1');
+
+    await review.previous(app, sm, {} as any);
+
+    expect((Notice as any).lastMessage).toBe('Unread+: Already at the first file');
+  });
+});
