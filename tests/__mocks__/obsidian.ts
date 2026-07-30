@@ -32,6 +32,22 @@ export class Setting {
   addButton(_cb: any) { return this; }
   addColorPicker(_cb: any) { return this; }
 }
+export class AbstractInputSuggest<T> {
+  app: any;
+  limit = 100;
+  constructor(app: any, _textInputEl: any) {
+    this.app = app;
+  }
+  setValue(_value: string): void {}
+  getValue(): string {
+    return '';
+  }
+  onSelect(_callback: (value: T, evt: MouseEvent | KeyboardEvent) => unknown): this {
+    return this;
+  }
+  open(): void {}
+  close(): void {}
+}
 export class Modal {
   app: any;
   contentEl: any = { createEl: () => ({}), createSpan: () => ({}), empty: () => {} };

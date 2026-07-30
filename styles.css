@@ -162,3 +162,22 @@
   opacity: 0.7;
   font-style: italic;
 }
+
+/* ── Ignored paths list ── */
+.unread-plus-ignore-path-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0 16px;
+}
+
+.unread-plus-ignore-path-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px;
+  background: var(--background-secondary);
+  border-radius: 4px;
+  font-size: 13px;
+}

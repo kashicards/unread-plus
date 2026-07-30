@@ -3,6 +3,7 @@ import type UnreadPlusPlugin from '../main';
 import { ConfirmModal } from './confirm-modal';
 import { DEFAULT_SETTINGS, DEFAULT_STATUS_CONFIGS } from './types';
 import { formatRemaining } from './format-duration';
+import { FolderSuggest } from './folder-suggest';
 
 export class SettingsTab extends PluginSettingTab {
   constructor(app: App, private plugin: UnreadPlusPlugin) {
@@ -85,18 +86,32 @@ export class SettingsTab extends PluginSettingTab {
 
     new Setting(el)
       .setName('Ignored paths')
-      .setDesc('One path prefix per line (e.g. "Templates" or "Archive/old"). Files under these paths are never marked unread.')
-      .addTextArea(text => {
-        text
-          .setValue(this.plugin.stateManager.getSettings().ignorePaths.join('\n'))
-          .onChange(async value => {
-            const paths = value.split('\n').map(s => s.trim()).filter(Boolean);
-            this.plugin.stateManager.updateSettings({ ignorePaths: paths });
-            await this.plugin.stateManager.save();
-          });
-        text.inputEl.rows = 4;
-        text.inputEl.setCssStyles({ width: '100%' });
+      .setDesc('Files under these folders are never marked unread. Type to search vault folders, then pick a suggestion or press Enter to add.')
+      .addText(text => {
+        text.setPlaceholder('Search folders…');
+        const suggest = new FolderSuggest(this.app, text.inputEl);
+        suggest.onSelect(folder => {
+          this.addIgnoredPath(folder.path);
+          text.setValue('');
+        });
+        text.inputEl.addEventListener('keydown', evt => {
+          if (evt.key !== 'Enter') return;
+          evt.preventDefault();
+          const value = text.getValue().trim();
+          if (value) {
+            this.addIgnoredPath(value);
+            text.setValue('');
+          }
+        });
       });
+
+    const ignorePathListEl = el.createDiv({ cls: 'unread-plus-ignore-path-list' });
+    for (const path of this.plugin.stateManager.getSettings().ignorePaths) {
+      const row = ignorePathListEl.createDiv({ cls: 'unread-plus-ignore-path-row' });
+      row.createSpan({ text: path });
+      const removeBtn = row.createEl('button', { text: '✕' });
+      removeBtn.addEventListener('click', () => this.removeIgnoredPath(path));
+    }
 
     new Setting(el)
       .setName('Ignored extensions')
@@ -110,6 +125,21 @@ export class SettingsTab extends PluginSettingTab {
             await this.plugin.stateManager.save();
           });
       });
+  }
+
+  private addIgnoredPath(path: string): void {
+    const current = this.plugin.stateManager.getSettings().ignorePaths;
+    if (current.includes(path)) return;
+    this.plugin.stateManager.updateSettings({ ignorePaths: [...current, path] });
+    this.plugin.stateManager.save().catch(() => {});
+    this.display();
+  }
+
+  private removeIgnoredPath(path: string): void {
+    const updated = this.plugin.stateManager.getSettings().ignorePaths.filter(p => p !== path);
+    this.plugin.stateManager.updateSettings({ ignorePaths: updated });
+    this.plugin.stateManager.save().catch(() => {});
+    this.display();
   }
 
   private renderStatusSection(el: HTMLElement): void {
