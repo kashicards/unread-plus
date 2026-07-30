@@ -550,7 +550,7 @@ var SettingsTab = class extends import_obsidian3.PluginSettingTab {
     this.renderResetSection(containerEl);
   }
   renderGeneralSection(el) {
-    new import_obsidian3.Setting(el).setName("Auto-read delay (seconds)").setDesc("Mark a file as read after it has been open this many seconds. Set 0 to disable.").addText((text) => {
+    new import_obsidian3.Setting(el).setName("Auto-read delay (seconds)").setDesc("Applies everywhere: mark ANY file as read after it has been open this many seconds \u2014 normal browsing, not just the review queue below. Set 0 to disable.").addText((text) => {
       text.setValue(String(this.plugin.stateManager.getSettings().autoReadSeconds)).onChange(async (value) => {
         const n = parseInt(value, 10);
         if (!isNaN(n) && n >= 0) {
@@ -767,7 +767,7 @@ var SettingsTab = class extends import_obsidian3.PluginSettingTab {
         await this.plugin.stateManager.save();
       });
     });
-    new import_obsidian3.Setting(el).setName("Auto-mark as read (seconds)").setDesc("Auto-clear status after this many seconds of the file being open. 0 = off.").addText((text) => {
+    new import_obsidian3.Setting(el).setName("Auto-mark as read during queue (seconds)").setDesc(`Applies only here: while stepping through the review queue with Next/Previous in review, auto-clear each file's status after this many seconds. Independent from "Auto-read delay" above, which applies to normal browsing. 0 = off.`).addText((text) => {
       text.setValue(String(this.plugin.stateManager.getSettings().reviewAutoMarkSeconds)).onChange(async (value) => {
         const n = parseInt(value, 10);
         if (!isNaN(n) && n >= 0) {

@@ -26,7 +26,7 @@ export class SettingsTab extends PluginSettingTab {
 
     new Setting(el)
       .setName('Auto-read delay (seconds)')
-      .setDesc('Mark a file as read after it has been open this many seconds. Set 0 to disable.')
+      .setDesc('Applies everywhere: mark ANY file as read after it has been open this many seconds — normal browsing, not just the review queue below. Set 0 to disable.')
       .addText(text => {
         text
           .setValue(String(this.plugin.stateManager.getSettings().autoReadSeconds))
@@ -306,8 +306,8 @@ export class SettingsTab extends PluginSettingTab {
       });
 
     new Setting(el)
-      .setName('Auto-mark as read (seconds)')
-      .setDesc('Auto-clear status after this many seconds of the file being open. 0 = off.')
+      .setName('Auto-mark as read during queue (seconds)')
+      .setDesc('Applies only here: while stepping through the review queue with Next/Previous in review, auto-clear each file\'s status after this many seconds. Independent from "Auto-read delay" above, which applies to normal browsing. 0 = off.')
       .addText(text => {
         text
           .setValue(String(this.plugin.stateManager.getSettings().reviewAutoMarkSeconds))
