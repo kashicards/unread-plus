@@ -2,6 +2,7 @@ import { App, Notice, PluginSettingTab, Setting } from 'obsidian';
 import type UnreadPlusPlugin from '../main';
 import { ConfirmModal } from './confirm-modal';
 import { DEFAULT_SETTINGS, DEFAULT_STATUS_CONFIGS } from './types';
+import { formatRemaining } from './format-duration';
 
 export class SettingsTab extends PluginSettingTab {
   constructor(app: App, private plugin: UnreadPlusPlugin) {
@@ -16,6 +17,7 @@ export class SettingsTab extends PluginSettingTab {
     this.renderIgnoreSection(containerEl);
     this.renderStatusSection(containerEl);
     this.renderReviewSection(containerEl);
+    this.renderSnoozeSection(containerEl);
     this.renderResetSection(containerEl);
   }
 
@@ -287,6 +289,39 @@ export class SettingsTab extends PluginSettingTab {
             }
           });
       });
+  }
+
+  private renderSnoozeSection(el: HTMLElement): void {
+    new Setting(el).setName('Snoozed files').setHeading();
+
+    const now = Date.now();
+    const snoozed = Object.entries(this.plugin.stateManager.getAllFileStatuses())
+      .filter((entry): entry is [string, typeof entry[1] & { snoozedUntil: number }] =>
+        !!entry[1].snoozedUntil && entry[1].snoozedUntil > now
+      )
+      .sort((a, b) => a[1].snoozedUntil - b[1].snoozedUntil);
+
+    if (snoozed.length === 0) {
+      el.createEl('p', {
+        text: 'No files are currently snoozed.',
+        cls: 'setting-item-description',
+      });
+      return;
+    }
+
+    for (const [path, status] of snoozed) {
+      new Setting(el)
+        .setName(path)
+        .setDesc(`Wakes up in ${formatRemaining(status.snoozedUntil - now)}`)
+        .addButton(btn =>
+          btn.setButtonText('Unsnooze').onClick(async () => {
+            this.plugin.stateManager.clearSnooze(path);
+            await this.plugin.stateManager.save();
+            this.plugin.badgeRenderer.refresh();
+            this.display();
+          })
+        );
+    }
   }
 
   private renderResetSection(el: HTMLElement): void {

@@ -484,6 +484,26 @@ var ConfirmModal = class extends import_obsidian.Modal {
   }
 };
 
+// src/format-duration.ts
+var MINUTE = 6e4;
+var HOUR = 36e5;
+var DAY = 864e5;
+function formatRemaining(ms) {
+  if (ms <= 0) return "now";
+  if (ms >= DAY) {
+    const days = Math.floor(ms / DAY);
+    const hours = Math.floor(ms % DAY / HOUR);
+    return `${days}d ${hours}h`;
+  }
+  if (ms >= HOUR) {
+    const hours = Math.floor(ms / HOUR);
+    const minutes2 = Math.floor(ms % HOUR / MINUTE);
+    return `${hours}h ${minutes2}m`;
+  }
+  const minutes = Math.max(1, Math.floor(ms / MINUTE));
+  return `${minutes}m`;
+}
+
 // src/settings-tab.ts
 var SettingsTab = class extends import_obsidian2.PluginSettingTab {
   constructor(app, plugin) {
@@ -497,6 +517,7 @@ var SettingsTab = class extends import_obsidian2.PluginSettingTab {
     this.renderIgnoreSection(containerEl);
     this.renderStatusSection(containerEl);
     this.renderReviewSection(containerEl);
+    this.renderSnoozeSection(containerEl);
     this.renderResetSection(containerEl);
   }
   renderGeneralSection(el) {
@@ -696,6 +717,30 @@ var SettingsTab = class extends import_obsidian2.PluginSettingTab {
         }
       });
     });
+  }
+  renderSnoozeSection(el) {
+    new import_obsidian2.Setting(el).setName("Snoozed files").setHeading();
+    const now = Date.now();
+    const snoozed = Object.entries(this.plugin.stateManager.getAllFileStatuses()).filter(
+      (entry) => !!entry[1].snoozedUntil && entry[1].snoozedUntil > now
+    ).sort((a, b) => a[1].snoozedUntil - b[1].snoozedUntil);
+    if (snoozed.length === 0) {
+      el.createEl("p", {
+        text: "No files are currently snoozed.",
+        cls: "setting-item-description"
+      });
+      return;
+    }
+    for (const [path, status] of snoozed) {
+      new import_obsidian2.Setting(el).setName(path).setDesc(`Wakes up in ${formatRemaining(status.snoozedUntil - now)}`).addButton(
+        (btn) => btn.setButtonText("Unsnooze").onClick(async () => {
+          this.plugin.stateManager.clearSnooze(path);
+          await this.plugin.stateManager.save();
+          this.plugin.badgeRenderer.refresh();
+          this.display();
+        })
+      );
+    }
   }
   renderResetSection(el) {
     new import_obsidian2.Setting(el).setName("Danger zone").setHeading();
