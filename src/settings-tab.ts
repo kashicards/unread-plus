@@ -148,6 +148,32 @@ export class SettingsTab extends PluginSettingTab {
       const config = configs[i];
       const row = listEl.createDiv({ cls: 'unread-plus-status-row' });
 
+      // Drag handle for reordering
+      const handle = row.createSpan({ cls: 'unread-plus-drag-handle', text: '⠿' });
+      handle.setAttribute('draggable', 'true');
+      handle.addEventListener('dragstart', evt => {
+        evt.dataTransfer?.setData('text/plain', String(i));
+        row.addClass('unread-plus-dragging');
+      });
+      handle.addEventListener('dragend', () => {
+        row.removeClass('unread-plus-dragging');
+      });
+      row.addEventListener('dragover', evt => {
+        evt.preventDefault();
+      });
+      row.addEventListener('drop', evt => {
+        evt.preventDefault();
+        const fromIndex = Number(evt.dataTransfer?.getData('text/plain'));
+        if (isNaN(fromIndex) || fromIndex === i) return;
+        const [moved] = configs.splice(fromIndex, 1);
+        configs.splice(i, 0, moved);
+        this.plugin.stateManager.updateStatusConfigs([...configs]);
+        this.plugin.stateManager.save().catch(() => {});
+        this.plugin.badgeRenderer.refresh();
+        listEl.empty();
+        this.renderStatusList(listEl);
+      });
+
       // Color picker
       const colorInput = row.createEl('input', { type: 'color' });
       colorInput.value = config.color;

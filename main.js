@@ -582,6 +582,33 @@ var SettingsTab = class extends import_obsidian2.PluginSettingTab {
     for (let i = 0; i < configs.length; i++) {
       const config = configs[i];
       const row = listEl.createDiv({ cls: "unread-plus-status-row" });
+      const handle = row.createSpan({ cls: "unread-plus-drag-handle", text: "\u283F" });
+      handle.setAttribute("draggable", "true");
+      handle.addEventListener("dragstart", (evt) => {
+        var _a2;
+        (_a2 = evt.dataTransfer) == null ? void 0 : _a2.setData("text/plain", String(i));
+        row.addClass("unread-plus-dragging");
+      });
+      handle.addEventListener("dragend", () => {
+        row.removeClass("unread-plus-dragging");
+      });
+      row.addEventListener("dragover", (evt) => {
+        evt.preventDefault();
+      });
+      row.addEventListener("drop", (evt) => {
+        var _a2;
+        evt.preventDefault();
+        const fromIndex = Number((_a2 = evt.dataTransfer) == null ? void 0 : _a2.getData("text/plain"));
+        if (isNaN(fromIndex) || fromIndex === i) return;
+        const [moved] = configs.splice(fromIndex, 1);
+        configs.splice(i, 0, moved);
+        this.plugin.stateManager.updateStatusConfigs([...configs]);
+        this.plugin.stateManager.save().catch(() => {
+        });
+        this.plugin.badgeRenderer.refresh();
+        listEl.empty();
+        this.renderStatusList(listEl);
+      });
       const colorInput = row.createEl("input", { type: "color" });
       colorInput.value = config.color;
       colorInput.addEventListener("change", () => {

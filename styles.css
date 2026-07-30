@@ -69,6 +69,17 @@
   border-bottom: 1px solid var(--background-modifier-border);
 }
 
+.unread-plus-drag-handle {
+  cursor: grab;
+  opacity: 0.6;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.unread-plus-status-row.unread-plus-dragging {
+  opacity: 0.5;
+}
+
 .unread-plus-status-row input[type='color'] {
   width: 32px;
   height: 28px;
