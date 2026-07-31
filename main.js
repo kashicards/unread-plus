@@ -1471,12 +1471,38 @@ var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian7.Plugin 
     span.setCssStyles({ color, fontSize: "10px", marginRight: "2px" });
     return span;
   }
+  collectFilesRecursive(folder) {
+    const result = [];
+    for (const child of folder.children) {
+      if (child instanceof import_obsidian7.TFile) {
+        if (!this.stateManager.isIgnored(child.path)) result.push(child);
+      } else if (child instanceof import_obsidian7.TFolder) {
+        result.push(...this.collectFilesRecursive(child));
+      }
+    }
+    return result;
+  }
+  expandToFiles(files) {
+    const seen = /* @__PURE__ */ new Set();
+    const result = [];
+    const add = (file) => {
+      if (seen.has(file.path)) return;
+      seen.add(file.path);
+      result.push(file);
+    };
+    for (const file of files) {
+      if (file instanceof import_obsidian7.TFile) {
+        if (!this.stateManager.isIgnored(file.path)) add(file);
+      } else if (file instanceof import_obsidian7.TFolder) {
+        for (const f of this.collectFilesRecursive(file)) add(f);
+      }
+    }
+    return result;
+  }
   registerContextMenu() {
     this.registerEvent(
       this.app.workspace.on("files-menu", (menu, files) => {
-        const selectedFiles = files.filter(
-          (file) => file instanceof import_obsidian7.TFile && !this.stateManager.isIgnored(file.path)
-        );
+        const selectedFiles = this.expandToFiles(files);
         if (selectedFiles.length === 0) return;
         const unreadConfig = this.stateManager.getStatusConfig("unread");
         menu.addSeparator();
@@ -1498,6 +1524,27 @@ var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian7.Plugin 
     );
     this.registerEvent(
       this.app.workspace.on("file-menu", (menu, file) => {
+        if (file instanceof import_obsidian7.TFolder) {
+          const folderFiles = this.collectFilesRecursive(file);
+          if (folderFiles.length === 0) return;
+          const unreadConfig = this.stateManager.getStatusConfig("unread");
+          menu.addSeparator();
+          if (unreadConfig) {
+            menu.addItem((item) => {
+              const frag = activeDocument.createDocumentFragment();
+              frag.appendChild(this.makeMenuDot(unreadConfig.color));
+              frag.appendChild(activeDocument.createTextNode("Mark all as Unread"));
+              item.setTitle(frag).onClick(() => this.setFilesStatus(folderFiles, unreadConfig.id));
+            });
+          }
+          menu.addItem((item) => {
+            const frag = activeDocument.createDocumentFragment();
+            if (unreadConfig) frag.appendChild(this.makeMenuDot(unreadConfig.color, "\u25CB"));
+            frag.appendChild(activeDocument.createTextNode("Mark all as read"));
+            item.setTitle(frag).onClick(() => this.clearFilesStatus(folderFiles));
+          });
+          return;
+        }
         if (!(file instanceof import_obsidian7.TFile)) return;
         const configs = this.stateManager.getStatusConfigs();
         const current = this.stateManager.getStatus(file.path);

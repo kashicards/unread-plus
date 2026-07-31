@@ -1,4 +1,4 @@
-import { FileView, Plugin, TAbstractFile, TFile } from 'obsidian';
+import { FileView, Plugin, TAbstractFile, TFile, TFolder } from 'obsidian';
 import { StateManager } from './src/state-manager';
 import { BadgeRenderer } from './src/badge-renderer';
 import { SettingsTab } from './src/settings-tab';
@@ -474,12 +474,40 @@ export default class UnreadPlusPlugin extends Plugin {
     return span;
   }
 
+  private collectFilesRecursive(folder: TFolder): TFile[] {
+    const result: TFile[] = [];
+    for (const child of folder.children) {
+      if (child instanceof TFile) {
+        if (!this.stateManager.isIgnored(child.path)) result.push(child);
+      } else if (child instanceof TFolder) {
+        result.push(...this.collectFilesRecursive(child));
+      }
+    }
+    return result;
+  }
+
+  private expandToFiles(files: TAbstractFile[]): TFile[] {
+    const seen = new Set<string>();
+    const result: TFile[] = [];
+    const add = (file: TFile) => {
+      if (seen.has(file.path)) return;
+      seen.add(file.path);
+      result.push(file);
+    };
+    for (const file of files) {
+      if (file instanceof TFile) {
+        if (!this.stateManager.isIgnored(file.path)) add(file);
+      } else if (file instanceof TFolder) {
+        for (const f of this.collectFilesRecursive(file)) add(f);
+      }
+    }
+    return result;
+  }
+
   private registerContextMenu(): void {
     this.registerEvent(
       this.app.workspace.on('files-menu', (menu, files: TAbstractFile[]) => {
-        const selectedFiles = files.filter((file): file is TFile =>
-          file instanceof TFile && !this.stateManager.isIgnored(file.path)
-        );
+        const selectedFiles = this.expandToFiles(files);
         if (selectedFiles.length === 0) return;
 
         const unreadConfig = this.stateManager.getStatusConfig('unread');
@@ -506,6 +534,32 @@ export default class UnreadPlusPlugin extends Plugin {
 
     this.registerEvent(
       this.app.workspace.on('file-menu', (menu, file) => {
+        if (file instanceof TFolder) {
+          const folderFiles = this.collectFilesRecursive(file);
+          if (folderFiles.length === 0) return;
+
+          const unreadConfig = this.stateManager.getStatusConfig('unread');
+
+          menu.addSeparator();
+
+          if (unreadConfig) {
+            menu.addItem(item => {
+              const frag = activeDocument.createDocumentFragment();
+              frag.appendChild(this.makeMenuDot(unreadConfig.color));
+              frag.appendChild(activeDocument.createTextNode('Mark all as Unread'));
+              item.setTitle(frag).onClick(() => this.setFilesStatus(folderFiles, unreadConfig.id));
+            });
+          }
+
+          menu.addItem(item => {
+            const frag = activeDocument.createDocumentFragment();
+            if (unreadConfig) frag.appendChild(this.makeMenuDot(unreadConfig.color, '○'));
+            frag.appendChild(activeDocument.createTextNode('Mark all as read'));
+            item.setTitle(frag).onClick(() => this.clearFilesStatus(folderFiles));
+          });
+          return;
+        }
+
         if (!(file instanceof TFile)) return;
 
         const configs = this.stateManager.getStatusConfigs();
