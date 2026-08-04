@@ -1075,7 +1075,7 @@ var OnboardingModal = class extends import_obsidian6.Modal {
 
 // src/review-menu.ts
 function buildReviewMenuItems(params) {
-  const items = [];
+  const items = [{ title: "Next unread", onClick: params.onNext }];
   if (params.isReviewActive) {
     items.push({ title: "Previous in review", onClick: params.onPrevious });
   }
@@ -1386,6 +1386,7 @@ var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian7.Plugin 
     evt.stopPropagation();
     const items = buildReviewMenuItems({
       isReviewActive: this.reviewMode.isActive(),
+      onNext: () => this.openNextUnread(),
       onPrevious: () => void this.reviewMode.previous(this.app, this.stateManager, this),
       onRestart: () => {
         this.reviewMode.start(this.stateManager);
