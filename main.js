@@ -1060,20 +1060,31 @@ function parseOverviewParams(source, knownStatusIds) {
 
 // src/onboarding-modal.ts
 var import_obsidian6 = require("obsidian");
+var STEPS = [
+  { icon: "\u25CF", text: "Colored dots next to file names mark their status (default: unread). Right-click a file to change or clear it." },
+  { icon: "\u{1F4C1}", text: "Numbers next to folder names show how many files inside have an open status." },
+  { icon: "\u2699\uFE0F", text: "Head to Settings \u2192 Unread+ to customize statuses, colors, and behavior." }
+];
 var OnboardingModal = class extends import_obsidian6.Modal {
   onOpen() {
     const { contentEl } = this;
-    contentEl.createEl("h2", { text: "Welcome to Unread+" });
+    contentEl.addClass("unread-plus-onboarding");
+    contentEl.createEl("h2", { text: "\u{1F44B} Welcome to Unread+" });
     contentEl.createEl("p", {
-      text: "Colored dots next to file names mark their status (default: unread). Right-click a file to change or clear its status."
+      cls: "unread-plus-onboarding-intro",
+      text: "Here's the quick version:"
     });
+    const list = contentEl.createEl("ul", { cls: "unread-plus-onboarding-list" });
+    for (const step of STEPS) {
+      const item = list.createEl("li");
+      item.createSpan({ cls: "unread-plus-onboarding-icon", text: step.icon });
+      item.createSpan({ text: step.text });
+    }
     contentEl.createEl("p", {
-      text: "Numbers next to folder names show how many files inside have an open status."
+      cls: "unread-plus-onboarding-outro",
+      text: "That's it, you're all set :)"
     });
-    contentEl.createEl("p", {
-      text: "Open Settings \u2192 Unread+ to customize statuses, colors, and behavior."
-    });
-    const okBtn = contentEl.createEl("button", { text: "Got it" });
+    const okBtn = contentEl.createEl("button", { cls: "mod-cta", text: "Got it" });
     okBtn.addEventListener("click", () => this.close());
   }
   onClose() {

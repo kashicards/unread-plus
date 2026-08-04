@@ -33,11 +33,11 @@ Track unread files in Obsidian. New files get a colored dot — folder badges pr
 status: unread, later
 folder: Projects
 limit: 5
-sort: age
+sort: created
 ```
 ````
 
-<!-- Bild einfügen: docs/preview-overview-codeblock.png — Beispiel-Notiz mit eingebettetem unread-overview Codeblock (Stats-Chips + Liste) -->
+![Unread overview codeblock](docs/preview-overview-codeblock.png)
 
 ---
 
@@ -49,7 +49,7 @@ sort: age
 
 On first install, a short welcome modal explains dots, folder badges, and right-click statuses.
 
-<!-- Bild einfügen: docs/preview-onboarding.png — Onboarding-Modal beim ersten Start -->
+![Onboarding modal](docs/preview-onboarding.png)
 
 ```bash
 # From source
@@ -78,19 +78,17 @@ cd unread-plus && npm install && npm run build
 
 ![Settings](docs/preview-settings.png)
 
-<!-- Bild aktualisieren: docs/preview-settings.png — zeigt noch nicht die neuen Felder (Icon-Eingabe, Drag-Handle, "New file grace period", "Reset to defaults") -->
-
 - **Auto-read delay** — auto-clear status after N seconds of the file being open
 - **New file grace period** — how long a newly created file is watched for becoming active before it's marked unread (protects fast create → paste → switch-away workflows)
 - **Show label in badge** — display `Unread ●` instead of just `●`
 - **Ignored paths / extensions** — never track certain folders or file types. Folder paths are typed with autocomplete suggestions from your vault; `json` is excluded by default.
 - **Statuses** — add, rename, recolor, give each an optional icon/emoji, and reorder them by drag-and-drop. "Count in folder badges & queue" controls folder badges and queue inclusion. Deleting a status asks for confirmation and shows how many files are affected.
 
-<!-- Bild einfügen: docs/preview-status-list.png — Status-Liste mit Icon-Feldern und Drag-Handles -->
+![Status list](docs/preview-status-list.png)
 
 - **Snoozed files** — overview of every currently snoozed file with remaining time and a one-click unsnooze button.
 
-<!-- Bild einfügen: docs/preview-snooze-list.png — Snooze-Übersicht in den Settings -->
+![Snoozed files list](docs/preview-snooze-list.png)
 
 - **Queue** — order and auto-mark behavior for `Ctrl+Shift+U`
 - **Reset to defaults** — resets all settings and statuses back to their defaults, behind a confirmation dialog
