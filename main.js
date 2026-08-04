@@ -438,11 +438,19 @@ var BadgeRenderer = class {
       const badge = activeDocument.createElement("span");
       badge.className = "unread-plus-folder-badge";
       for (const seg of count.segments) {
-        const span = activeDocument.createElement("span");
-        span.textContent = `${seg.count}${(_a = seg.icon) != null ? _a : "\u25CF"}`;
-        span.style.color = seg.color;
-        span.title = `${seg.count} ${seg.label}`;
-        badge.appendChild(span);
+        const segEl = activeDocument.createElement("span");
+        segEl.className = "unread-plus-folder-badge-segment";
+        segEl.style.color = seg.color;
+        segEl.title = `${seg.count} ${seg.label}`;
+        const countEl = activeDocument.createElement("span");
+        countEl.className = "unread-plus-folder-badge-count";
+        countEl.textContent = String(seg.count);
+        const iconEl = activeDocument.createElement("span");
+        iconEl.className = "unread-plus-folder-badge-icon";
+        iconEl.textContent = (_a = seg.icon) != null ? _a : "\u25CF";
+        segEl.appendChild(countEl);
+        segEl.appendChild(iconEl);
+        badge.appendChild(segEl);
       }
       titleEl.appendChild(badge);
     });
@@ -1554,7 +1562,7 @@ var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian7.Plugin 
         }
         menu.addItem((item) => {
           const frag = activeDocument.createDocumentFragment();
-          if (unreadConfig) frag.appendChild(this.makeMenuDot(unreadConfig.color, "\u25CB"));
+          frag.appendChild(this.makeMenuDot("var(--text-muted)", "\u25CB"));
           frag.appendChild(activeDocument.createTextNode("Mark selected as read"));
           item.setTitle(frag).onClick(() => this.clearFilesStatus(selectedFiles));
         });
@@ -1577,7 +1585,7 @@ var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian7.Plugin 
           }
           menu.addItem((item) => {
             const frag = activeDocument.createDocumentFragment();
-            if (unreadConfig) frag.appendChild(this.makeMenuDot(unreadConfig.color, "\u25CB"));
+            frag.appendChild(this.makeMenuDot("var(--text-muted)", "\u25CB"));
             frag.appendChild(activeDocument.createTextNode("Mark all as read"));
             item.setTitle(frag).onClick(() => this.clearFilesStatus(folderFiles));
           });

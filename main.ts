@@ -557,7 +557,7 @@ export default class UnreadPlusPlugin extends Plugin {
 
         menu.addItem(item => {
           const frag = activeDocument.createDocumentFragment();
-          if (unreadConfig) frag.appendChild(this.makeMenuDot(unreadConfig.color, '○'));
+          frag.appendChild(this.makeMenuDot('var(--text-muted)', '○'));
           frag.appendChild(activeDocument.createTextNode('Mark selected as read'));
           item.setTitle(frag).onClick(() => this.clearFilesStatus(selectedFiles));
         });
@@ -585,7 +585,7 @@ export default class UnreadPlusPlugin extends Plugin {
 
           menu.addItem(item => {
             const frag = activeDocument.createDocumentFragment();
-            if (unreadConfig) frag.appendChild(this.makeMenuDot(unreadConfig.color, '○'));
+            frag.appendChild(this.makeMenuDot('var(--text-muted)', '○'));
             frag.appendChild(activeDocument.createTextNode('Mark all as read'));
             item.setTitle(frag).onClick(() => this.clearFilesStatus(folderFiles));
           });
