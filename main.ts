@@ -369,6 +369,7 @@ export default class UnreadPlusPlugin extends Plugin {
 
   private showReviewMenu(evt: MouseEvent): void {
     evt.preventDefault();
+    evt.stopPropagation();
 
     const items = buildReviewMenuItems({
       isReviewActive: this.reviewMode.isActive(),
