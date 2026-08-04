@@ -652,7 +652,7 @@ var SettingsTab = class extends import_obsidian3.PluginSettingTab {
   renderStatusSection(el) {
     new import_obsidian3.Setting(el).setName("Statuses").setHeading();
     el.createEl("p", {
-      text: 'Each status can be applied via right-click. Statuses marked "Counts as open" appear in folder badges.',
+      text: 'Each status can be applied via right-click. Statuses marked "Count in folder badges & queue" appear in folder badges and the review queue.',
       cls: "setting-item-description"
     });
     const listEl = el.createDiv({ cls: "unread-plus-status-list" });
@@ -728,6 +728,7 @@ var SettingsTab = class extends import_obsidian3.PluginSettingTab {
       iconInput.value = (_a = config.icon) != null ? _a : "";
       iconInput.placeholder = "\u25CF";
       iconInput.maxLength = 4;
+      iconInput.title = "Optional icon/emoji shown instead of the dot for files with this status";
       iconInput.addEventListener("change", () => {
         const icon = iconInput.value.trim();
         configs[i] = { ...configs[i], icon: icon || void 0 };
@@ -737,9 +738,10 @@ var SettingsTab = class extends import_obsidian3.PluginSettingTab {
         this.plugin.badgeRenderer.refresh();
       });
       const toggleLabel = row.createEl("label", { cls: "unread-plus-toggle-label" });
+      toggleLabel.title = "Include files with this status in folder badge counts and the review queue (Ctrl+Shift+U)";
       const toggleInput = toggleLabel.createEl("input", { type: "checkbox" });
       toggleInput.checked = config.countsAsOpen;
-      toggleLabel.createSpan({ text: " Counts as open" });
+      toggleLabel.createSpan({ text: " Count in folder badges & queue" });
       toggleInput.addEventListener("change", () => {
         configs[i] = { ...configs[i], countsAsOpen: toggleInput.checked };
         this.plugin.stateManager.updateStatusConfigs([...configs]);
@@ -773,7 +775,7 @@ var SettingsTab = class extends import_obsidian3.PluginSettingTab {
   renderReviewSection(el) {
     new import_obsidian3.Setting(el).setName("Queue (Ctrl+Shift+U)").setHeading();
     el.createEl("p", {
-      text: 'Opens all files with a status (Unread, Later, \u2026) one by one. "Counts as open" on each status controls which ones appear here.',
+      text: 'Opens all files with a status (Unread, Later, \u2026) one by one. "Count in folder badges & queue" on each status controls which ones appear here.',
       cls: "setting-item-description"
     });
     new import_obsidian3.Setting(el).setName("Queue order").addDropdown((drop) => {
@@ -1071,6 +1073,16 @@ var OnboardingModal = class extends import_obsidian6.Modal {
   }
 };
 
+// src/review-menu.ts
+function buildReviewMenuItems(params) {
+  const items = [];
+  if (params.isReviewActive) {
+    items.push({ title: "Previous in review", onClick: params.onPrevious });
+  }
+  items.push({ title: "Restart queue from beginning", onClick: params.onRestart });
+  return items;
+}
+
 // main.ts
 var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian7.Plugin {
   constructor() {
@@ -1094,12 +1106,19 @@ var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian7.Plugin 
     this.badgeRenderer = new BadgeRenderer(this.app, this.stateManager);
     this.reviewMode = new ReviewMode();
     this.statusBarItem = this.addStatusBarItem();
+    this.statusBarItem.addClass("unread-plus-status-bar-clickable");
+    this.statusBarItem.addEventListener("click", () => this.openNextUnread());
+    this.statusBarItem.addEventListener("contextmenu", (evt) => this.showReviewMenu(evt));
     this.badgeRenderer.start();
     this.registerVaultEvents();
     this.registerWorkspaceEvents();
     this.registerCommands();
     this.registerContextMenu();
     this.addSettingTab(new SettingsTab(this.app, this));
+    const ribbonIconEl = this.addRibbonIcon("check-circle", "Open next unread", () => {
+      this.openNextUnread();
+    });
+    ribbonIconEl.addEventListener("contextmenu", (evt) => this.showReviewMenu(evt));
     this.registerMarkdownCodeBlockProcessor("unread-overview", (source, el, ctx) => {
       const knownStatusIds = this.stateManager.getStatusConfigs().map((c) => c.id);
       const params = parseOverviewParams(source, knownStatusIds);
@@ -1358,6 +1377,27 @@ var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian7.Plugin 
     });
     this.refreshUI();
   }
+  openNextUnread() {
+    if (!this.reviewMode.isActive()) this.reviewMode.start(this.stateManager);
+    void this.reviewMode.next(this.app, this.stateManager, this);
+  }
+  showReviewMenu(evt) {
+    evt.preventDefault();
+    evt.stopPropagation();
+    const items = buildReviewMenuItems({
+      isReviewActive: this.reviewMode.isActive(),
+      onPrevious: () => void this.reviewMode.previous(this.app, this.stateManager, this),
+      onRestart: () => {
+        this.reviewMode.start(this.stateManager);
+        void this.reviewMode.next(this.app, this.stateManager, this);
+      }
+    });
+    const menu = new import_obsidian7.Menu();
+    for (const item of items) {
+      menu.addItem((menuItem) => menuItem.setTitle(item.title).onClick(item.onClick));
+    }
+    menu.showAtMouseEvent(evt);
+  }
   registerCommands() {
     this.addCommand({
       id: "mark-all-read",
@@ -1403,10 +1443,7 @@ var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian7.Plugin 
       id: "open-next-unread",
       name: "Open next unread",
       hotkeys: [{ modifiers: ["Mod", "Shift"], key: "U" }],
-      callback: () => {
-        if (!this.reviewMode.isActive()) this.reviewMode.start(this.stateManager);
-        void this.reviewMode.next(this.app, this.stateManager, this);
-      }
+      callback: () => this.openNextUnread()
     });
     this.addCommand({
       id: "start-review",

@@ -169,7 +169,7 @@ export class SettingsTab extends PluginSettingTab {
   private renderStatusSection(el: HTMLElement): void {
     new Setting(el).setName('Statuses').setHeading();
     el.createEl('p', {
-      text: 'Each status can be applied via right-click. Statuses marked "Counts as open" appear in folder badges.',
+      text: 'Each status can be applied via right-click. Statuses marked "Count in folder badges & queue" appear in folder badges and the review queue.',
       cls: 'setting-item-description',
     });
 
@@ -255,6 +255,7 @@ export class SettingsTab extends PluginSettingTab {
       iconInput.value = config.icon ?? '';
       iconInput.placeholder = '●';
       iconInput.maxLength = 4;
+      iconInput.title = 'Optional icon/emoji shown instead of the dot for files with this status';
       iconInput.addEventListener('change', () => {
         const icon = iconInput.value.trim();
         configs[i] = { ...configs[i], icon: icon || undefined };
@@ -265,9 +266,10 @@ export class SettingsTab extends PluginSettingTab {
 
       // Counts as open toggle
       const toggleLabel = row.createEl('label', { cls: 'unread-plus-toggle-label' });
+      toggleLabel.title = 'Include files with this status in folder badge counts and the review queue (Ctrl+Shift+U)';
       const toggleInput = toggleLabel.createEl('input', { type: 'checkbox' });
       toggleInput.checked = config.countsAsOpen;
-      toggleLabel.createSpan({ text: ' Counts as open' });
+      toggleLabel.createSpan({ text: ' Count in folder badges & queue' });
       toggleInput.addEventListener('change', () => {
         configs[i] = { ...configs[i], countsAsOpen: toggleInput.checked };
         this.plugin.stateManager.updateStatusConfigs([...configs]);
@@ -309,7 +311,7 @@ export class SettingsTab extends PluginSettingTab {
   private renderReviewSection(el: HTMLElement): void {
     new Setting(el).setName('Queue (Ctrl+Shift+U)').setHeading();
     el.createEl('p', {
-      text: 'Opens all files with a status (Unread, Later, …) one by one. "Counts as open" on each status controls which ones appear here.',
+      text: 'Opens all files with a status (Unread, Later, …) one by one. "Count in folder badges & queue" on each status controls which ones appear here.',
       cls: 'setting-item-description',
     });
 

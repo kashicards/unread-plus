@@ -84,7 +84,7 @@ cd unread-plus && npm install && npm run build
 - **New file grace period** — how long a newly created file is watched for becoming active before it's marked unread (protects fast create → paste → switch-away workflows)
 - **Show label in badge** — display `Unread ●` instead of just `●`
 - **Ignored paths / extensions** — never track certain folders or file types. Folder paths are typed with autocomplete suggestions from your vault; `json` is excluded by default.
-- **Statuses** — add, rename, recolor, give each an optional icon/emoji, and reorder them by drag-and-drop. "Counts as open" controls folder badges and queue inclusion. Deleting a status asks for confirmation and shows how many files are affected.
+- **Statuses** — add, rename, recolor, give each an optional icon/emoji, and reorder them by drag-and-drop. "Count in folder badges & queue" controls folder badges and queue inclusion. Deleting a status asks for confirmation and shows how many files are affected.
 
 <!-- Bild einfügen: docs/preview-status-list.png — Status-Liste mit Icon-Feldern und Drag-Handles -->
 
