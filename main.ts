@@ -1,4 +1,4 @@
-import { FileView, Plugin, TAbstractFile, TFile, TFolder } from 'obsidian';
+import { FileView, Menu, Plugin, TAbstractFile, TFile, TFolder } from 'obsidian';
 import { StateManager } from './src/state-manager';
 import { BadgeRenderer } from './src/badge-renderer';
 import { SettingsTab } from './src/settings-tab';
@@ -6,6 +6,7 @@ import { ReviewMode } from './src/review-mode';
 import { OverviewBlockChild } from './src/overview-block';
 import { parseOverviewParams } from './src/overview-params';
 import { OnboardingModal } from './src/onboarding-modal';
+import { buildReviewMenuItems } from './src/review-menu';
 
 export default class UnreadPlusPlugin extends Plugin {
   stateManager!: StateManager;
@@ -42,6 +43,11 @@ export default class UnreadPlusPlugin extends Plugin {
     this.registerContextMenu();
 
     this.addSettingTab(new SettingsTab(this.app, this));
+
+    const ribbonIconEl = this.addRibbonIcon('check-circle', 'Open next unread', () => {
+      this.openNextUnread();
+    });
+    ribbonIconEl.addEventListener('contextmenu', evt => this.showReviewMenu(evt));
 
     this.registerMarkdownCodeBlockProcessor('unread-overview', (source, el, ctx) => {
       const knownStatusIds = this.stateManager.getStatusConfigs().map(c => c.id);
@@ -356,6 +362,25 @@ export default class UnreadPlusPlugin extends Plugin {
   private openNextUnread(): void {
     if (!this.reviewMode.isActive()) this.reviewMode.start(this.stateManager);
     void this.reviewMode.next(this.app, this.stateManager, this);
+  }
+
+  private showReviewMenu(evt: MouseEvent): void {
+    evt.preventDefault();
+
+    const items = buildReviewMenuItems({
+      isReviewActive: this.reviewMode.isActive(),
+      onPrevious: () => void this.reviewMode.previous(this.app, this.stateManager, this),
+      onRestart: () => {
+        this.reviewMode.start(this.stateManager);
+        void this.reviewMode.next(this.app, this.stateManager, this);
+      },
+    });
+
+    const menu = new Menu();
+    for (const item of items) {
+      menu.addItem(menuItem => menuItem.setTitle(item.title).onClick(item.onClick));
+    }
+    menu.showAtMouseEvent(evt);
   }
 
   private registerCommands(): void {
