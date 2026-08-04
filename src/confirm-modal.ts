@@ -1,7 +1,7 @@
 import { App, Modal, Setting } from 'obsidian';
 
 export class ConfirmModal extends Modal {
-  constructor(app: App, private message: string, private onConfirm: () => void) {
+  constructor(app: App, private message: string, private onConfirm: () => void | Promise<void>) {
     super(app);
   }
 
@@ -13,9 +13,9 @@ export class ConfirmModal extends Modal {
       .addButton(btn =>
         btn
           .setButtonText('Confirm')
-          .setWarning()
-          .onClick(() => {
-            this.onConfirm();
+          .setDestructive()
+          .onClick(async () => {
+            await this.onConfirm();
             this.close();
           })
       );
