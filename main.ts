@@ -373,6 +373,7 @@ export default class UnreadPlusPlugin extends Plugin {
 
     const items = buildReviewMenuItems({
       isReviewActive: this.reviewMode.isActive(),
+      onNext: () => this.openNextUnread(),
       onPrevious: () => void this.reviewMode.previous(this.app, this.stateManager, this),
       onRestart: () => {
         this.reviewMode.start(this.stateManager);
