@@ -353,6 +353,11 @@ export default class UnreadPlusPlugin extends Plugin {
     this.refreshUI();
   }
 
+  private openNextUnread(): void {
+    if (!this.reviewMode.isActive()) this.reviewMode.start(this.stateManager);
+    void this.reviewMode.next(this.app, this.stateManager, this);
+  }
+
   private registerCommands(): void {
     this.addCommand({
       id: 'mark-all-read',
@@ -398,10 +403,7 @@ export default class UnreadPlusPlugin extends Plugin {
       id: 'open-next-unread',
       name: 'Open next unread',
       hotkeys: [{ modifiers: ['Mod', 'Shift'], key: 'U' }],
-      callback: () => {
-        if (!this.reviewMode.isActive()) this.reviewMode.start(this.stateManager);
-        void this.reviewMode.next(this.app, this.stateManager, this);
-      },
+      callback: () => this.openNextUnread(),
     });
 
     this.addCommand({
