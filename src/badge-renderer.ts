@@ -62,7 +62,7 @@ export class BadgeRenderer {
       const config = configMap.get(status.statusId);
       if (!config) return;
 
-      const dot = activeDocument.createElement('span');
+      const dot = activeDocument.createSpan();
       dot.className = 'unread-plus-dot';
       dot.setAttribute('data-status', status.statusId);
       dot.style.setProperty('--dot-color', config.color);
@@ -101,19 +101,19 @@ export class BadgeRenderer {
       const count = folderCounts.get(path);
       if (!count || count.segments.length === 0) return;
 
-      const badge = activeDocument.createElement('span');
+      const badge = activeDocument.createSpan();
       badge.className = 'unread-plus-folder-badge';
       for (const seg of count.segments) {
-        const segEl = activeDocument.createElement('span');
+        const segEl = activeDocument.createSpan();
         segEl.className = 'unread-plus-folder-badge-segment';
         segEl.style.color = seg.color;
         segEl.title = `${seg.count} ${seg.label}`;
 
-        const countEl = activeDocument.createElement('span');
+        const countEl = activeDocument.createSpan();
         countEl.className = 'unread-plus-folder-badge-count';
         countEl.textContent = String(seg.count);
 
-        const iconEl = activeDocument.createElement('span');
+        const iconEl = activeDocument.createSpan();
         iconEl.className = 'unread-plus-folder-badge-icon';
         iconEl.textContent = seg.icon ?? '●';
 
