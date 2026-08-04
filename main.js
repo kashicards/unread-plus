@@ -492,7 +492,7 @@ var ConfirmModal = class extends import_obsidian.Modal {
     const { contentEl } = this;
     contentEl.createEl("p", { text: this.message });
     new import_obsidian.Setting(contentEl).addButton((btn) => btn.setButtonText("Cancel").onClick(() => this.close())).addButton(
-      (btn) => btn.setButtonText("Confirm").setDestructive().onClick(async () => {
+      (btn) => btn.setButtonText("Confirm").setWarning().onClick(async () => {
         await this.onConfirm();
         this.close();
       })
@@ -822,7 +822,7 @@ var SettingsTab = class extends import_obsidian3.PluginSettingTab {
   renderResetSection(el) {
     new import_obsidian3.Setting(el).setName("Danger zone").setHeading();
     new import_obsidian3.Setting(el).setName("Reset to defaults").setDesc("Resets all settings and statuses back to their defaults. This cannot be undone.").addButton(
-      (btn) => btn.setButtonText("Reset to defaults").setDestructive().onClick(() => {
+      (btn) => btn.setButtonText("Reset to defaults").setWarning().onClick(() => {
         new ConfirmModal(
           this.app,
           "This will reset all settings and statuses to their defaults. Continue?",

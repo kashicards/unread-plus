@@ -374,7 +374,7 @@ export class SettingsTab extends PluginSettingTab {
       .addButton(btn =>
         btn
           .setButtonText('Reset to defaults')
-          .setDestructive()
+          .setWarning()
           .onClick(() => {
             new ConfirmModal(
               this.app,
