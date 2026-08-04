@@ -52,6 +52,9 @@
 /* ── Status bar ── */
 .unread-plus-hidden { display: none; }
 .unread-plus-status-bar-dot { margin-right: 6px; }
+.unread-plus-status-bar-clickable {
+  cursor: pointer;
+}
 
 /* ── Settings status list ── */
 .unread-plus-status-list {

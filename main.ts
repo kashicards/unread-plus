@@ -35,6 +35,9 @@ export default class UnreadPlusPlugin extends Plugin {
     this.badgeRenderer = new BadgeRenderer(this.app, this.stateManager);
     this.reviewMode = new ReviewMode();
     this.statusBarItem = this.addStatusBarItem();
+    this.statusBarItem.addClass('unread-plus-status-bar-clickable');
+    this.statusBarItem.addEventListener('click', () => this.openNextUnread());
+    this.statusBarItem.addEventListener('contextmenu', evt => this.showReviewMenu(evt));
 
     this.badgeRenderer.start();
     this.registerVaultEvents();
