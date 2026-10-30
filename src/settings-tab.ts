@@ -109,6 +109,20 @@ export class SettingsTab extends PluginSettingTab {
     new Setting(el).setName('Ignore').setHeading();
 
     new Setting(el)
+      .setName('Only track Markdown (.md)')
+      .setDesc('Keep reading status and saved file snapshots for Markdown files only. Enabling removes existing non-Markdown reading records; disabling does not restore them. Vault files are not deleted.')
+      .addToggle(toggle => {
+        toggle
+          .setValue(this.plugin.stateManager.getSettings().markdownOnly)
+          .onChange(async value => {
+            this.plugin.stateManager.updateSettings({ markdownOnly: value });
+            await this.plugin.stateManager.save();
+            this.plugin.refreshUI();
+            this.display();
+          });
+      });
+
+    new Setting(el)
       .setName('Ignored paths')
       .setDesc('Files under these folders are never marked unread. Type to search vault folders, then pick a suggestion or press Enter to add.')
       .addText(text => {

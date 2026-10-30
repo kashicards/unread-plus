@@ -23,7 +23,10 @@ __export(main_exports, {
   default: () => UnreadPlusPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian7 = require("obsidian");
+var import_obsidian8 = require("obsidian");
+
+// src/state-manager.ts
+var import_obsidian = require("obsidian");
 
 // src/types.ts
 var DEFAULT_STATUS_CONFIGS = [
@@ -31,6 +34,7 @@ var DEFAULT_STATUS_CONFIGS = [
   { id: "later", label: "Later", color: "#FF8C00", countsAsOpen: true }
 ];
 var DEFAULT_SETTINGS = {
+  markdownOnly: false,
   autoReadSeconds: 0,
   ignorePaths: [],
   ignoreExtensions: ["json"],
@@ -80,6 +84,7 @@ var StateManager = class {
       onboardingShown: (_h = saved.onboardingShown) != null ? _h : true
     };
     this.migrate();
+    this.prepareDataForSave();
   }
   migrate() {
     var _a;
@@ -107,11 +112,27 @@ var StateManager = class {
       this.data.version = 4;
     }
   }
+  isTrackedFile(path) {
+    return !this.data.settings.markdownOnly || /\.md$/i.test(path);
+  }
+  prepareDataForSave() {
+    if (!this.data.settings.markdownOnly) return this.data;
+    this.data.fileStatuses = Object.fromEntries(
+      Object.entries(this.data.fileStatuses).filter(([path]) => this.isTrackedFile(path))
+    );
+    this.data.knownPaths = this.data.knownPaths.filter((path) => this.isTrackedFile(path));
+    this.data.readPaths = this.data.readPaths.filter((path) => this.isTrackedFile(path));
+    this.data.lastOpenPaths = this.data.lastOpenPaths.filter((path) => this.isTrackedFile(path));
+    this.data.movedPaths = this.data.movedPaths.filter(
+      (path) => this.isTrackedFile(path) || this.plugin.app.vault.getAbstractFileByPath(path) instanceof import_obsidian.TFolder
+    );
+    return this.data;
+  }
   scheduleSave() {
     if (this.saveTimer !== null) window.clearTimeout(this.saveTimer);
     this.saveTimer = window.setTimeout(() => {
       this.saveTimer = null;
-      this.plugin.saveData(this.data).catch(() => {
+      this.plugin.saveData(this.prepareDataForSave()).catch(() => {
       });
     }, 300);
   }
@@ -120,18 +141,20 @@ var StateManager = class {
       window.clearTimeout(this.saveTimer);
       this.saveTimer = null;
     }
-    await this.plugin.saveData(this.data);
+    await this.plugin.saveData(this.prepareDataForSave());
   }
   async save() {
-    await this.plugin.saveData(this.data);
+    await this.plugin.saveData(this.prepareDataForSave());
   }
   // --- File status ---
   setStatus(path, statusId) {
+    if (!this.isTrackedFile(path)) return;
     this.data.fileStatuses[path] = { statusId, markedAt: Date.now() };
     const idx = this.data.readPaths.indexOf(path);
     if (idx !== -1) this.data.readPaths.splice(idx, 1);
   }
   clearStatus(path) {
+    if (!this.isTrackedFile(path)) return;
     delete this.data.fileStatuses[path];
     if (!this.data.readPaths.includes(path)) this.data.readPaths.push(path);
   }
@@ -192,6 +215,7 @@ var StateManager = class {
         this.data.readPaths.push(p);
       }
     }
+    this.prepareDataForSave();
   }
   deletePath(path) {
     for (const key of Object.keys(this.data.fileStatuses)) {
@@ -260,7 +284,7 @@ var StateManager = class {
     return new Set(this.data.knownPaths);
   }
   setKnownPaths(paths) {
-    this.data.knownPaths = paths;
+    this.data.knownPaths = paths.filter((path) => this.isTrackedFile(path));
   }
   getLastCloseTime() {
     return this.data.lastCloseTime;
@@ -272,7 +296,7 @@ var StateManager = class {
     return new Set(this.data.lastOpenPaths);
   }
   setLastOpenPaths(paths) {
-    this.data.lastOpenPaths = paths;
+    this.data.lastOpenPaths = paths.filter((path) => this.isTrackedFile(path));
   }
   // --- Moved paths ---
   addMovedPath(newPath) {
@@ -308,10 +332,12 @@ var StateManager = class {
   }
   updateSettings(patch) {
     this.data.settings = { ...this.data.settings, ...patch };
+    this.prepareDataForSave();
   }
   // --- Ignore ---
   isIgnored(path) {
     var _a;
+    if (!this.isTrackedFile(path)) return true;
     const { ignorePaths, ignoreExtensions } = this.data.settings;
     if (ignorePaths.some((p) => path === p || path.startsWith(p + "/"))) return true;
     const basename = (_a = path.split("/").pop()) != null ? _a : "";
@@ -478,11 +504,11 @@ var BadgeRenderer = class {
 };
 
 // src/settings-tab.ts
-var import_obsidian3 = require("obsidian");
+var import_obsidian4 = require("obsidian");
 
 // src/confirm-modal.ts
-var import_obsidian = require("obsidian");
-var ConfirmModal = class extends import_obsidian.Modal {
+var import_obsidian2 = require("obsidian");
+var ConfirmModal = class extends import_obsidian2.Modal {
   constructor(app, message, onConfirm) {
     super(app);
     this.message = message;
@@ -491,7 +517,7 @@ var ConfirmModal = class extends import_obsidian.Modal {
   onOpen() {
     const { contentEl } = this;
     contentEl.createEl("p", { text: this.message });
-    new import_obsidian.Setting(contentEl).addButton((btn) => btn.setButtonText("Cancel").onClick(() => this.close())).addButton(
+    new import_obsidian2.Setting(contentEl).addButton((btn) => btn.setButtonText("Cancel").onClick(() => this.close())).addButton(
       (btn) => btn.setButtonText("Confirm").setWarning().onClick(async () => {
         await this.onConfirm();
         this.close();
@@ -524,13 +550,13 @@ function formatRemaining(ms) {
 }
 
 // src/folder-suggest.ts
-var import_obsidian2 = require("obsidian");
-var FolderSuggest = class extends import_obsidian2.AbstractInputSuggest {
+var import_obsidian3 = require("obsidian");
+var FolderSuggest = class extends import_obsidian3.AbstractInputSuggest {
   getSuggestions(query) {
     const lowerQuery = query.toLowerCase();
     const folders = [];
     for (const file of this.app.vault.getAllLoadedFiles()) {
-      if (file instanceof import_obsidian2.TFolder && file.path.toLowerCase().includes(lowerQuery)) {
+      if (file instanceof import_obsidian3.TFolder && file.path.toLowerCase().includes(lowerQuery)) {
         folders.push(file);
       }
     }
@@ -542,7 +568,7 @@ var FolderSuggest = class extends import_obsidian2.AbstractInputSuggest {
 };
 
 // src/settings-tab.ts
-var SettingsTab = class extends import_obsidian3.PluginSettingTab {
+var SettingsTab = class extends import_obsidian4.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
     this.plugin = plugin;
@@ -559,7 +585,7 @@ var SettingsTab = class extends import_obsidian3.PluginSettingTab {
     this.renderResetSection(containerEl);
   }
   renderGeneralSection(el) {
-    new import_obsidian3.Setting(el).setName("New file grace period (seconds)").setDesc("How long after creating a file to watch whether it becomes the active file, before marking it unread. Increase if you see false unread marks when creating and leaving files very quickly. Max 10.").addText((text) => {
+    new import_obsidian4.Setting(el).setName("New file grace period (seconds)").setDesc("How long after creating a file to watch whether it becomes the active file, before marking it unread. Increase if you see false unread marks when creating and leaving files very quickly. Max 10.").addText((text) => {
       text.setValue(String(this.plugin.stateManager.getSettings().newFileGraceSeconds)).onChange(async (value) => {
         const n = parseInt(value, 10);
         if (!isNaN(n) && n >= 0 && n <= 10) {
@@ -568,14 +594,14 @@ var SettingsTab = class extends import_obsidian3.PluginSettingTab {
         }
       });
     });
-    new import_obsidian3.Setting(el).setName("Show status label in badge").setDesc('Display "\u25CF Unread" instead of just "\u25CF" next to file names.').addToggle((toggle) => {
+    new import_obsidian4.Setting(el).setName("Show status label in badge").setDesc('Display "\u25CF Unread" instead of just "\u25CF" next to file names.').addToggle((toggle) => {
       toggle.setValue(this.plugin.stateManager.getSettings().badgeShowLabel).onChange(async (value) => {
         this.plugin.stateManager.updateSettings({ badgeShowLabel: value });
         await this.plugin.stateManager.save();
         this.plugin.badgeRenderer.refresh();
       });
     });
-    new import_obsidian3.Setting(el).setName("Dot aging").setDesc("Dots start at full opacity and fade slightly each day. Keeps old unread files visually subtle.").addToggle((toggle) => {
+    new import_obsidian4.Setting(el).setName("Dot aging").setDesc("Dots start at full opacity and fade slightly each day. Keeps old unread files visually subtle.").addToggle((toggle) => {
       toggle.setValue(this.plugin.stateManager.getSettings().dotAging).onChange(async (value) => {
         this.plugin.stateManager.updateSettings({ dotAging: value });
         await this.plugin.stateManager.save();
@@ -584,12 +610,12 @@ var SettingsTab = class extends import_obsidian3.PluginSettingTab {
     });
   }
   renderAutoMarkSection(el) {
-    new import_obsidian3.Setting(el).setName("Auto-mark as read").setHeading();
+    new import_obsidian4.Setting(el).setName("Auto-mark as read").setHeading();
     el.createEl("p", {
       text: "Two independent timers for automatically clearing a file's status \u2014 one for everyday browsing, one only while stepping through the review queue.",
       cls: "setting-item-description"
     });
-    new import_obsidian3.Setting(el).setName("Everywhere (seconds)").setDesc("Mark ANY file as read after it has been open this many seconds \u2014 applies during normal browsing too, not just the review queue. Set 0 to disable.").addText((text) => {
+    new import_obsidian4.Setting(el).setName("Everywhere (seconds)").setDesc("Mark ANY file as read after it has been open this many seconds \u2014 applies during normal browsing too, not just the review queue. Set 0 to disable.").addText((text) => {
       text.setValue(String(this.plugin.stateManager.getSettings().autoReadSeconds)).onChange(async (value) => {
         const n = parseInt(value, 10);
         if (!isNaN(n) && n >= 0) {
@@ -598,7 +624,7 @@ var SettingsTab = class extends import_obsidian3.PluginSettingTab {
         }
       });
     });
-    new import_obsidian3.Setting(el).setName("During review queue only (seconds)").setDesc("While stepping through the review queue with Next/Previous in review, auto-clear each file's status after this many seconds. 0 = off.").addText((text) => {
+    new import_obsidian4.Setting(el).setName("During review queue only (seconds)").setDesc("While stepping through the review queue with Next/Previous in review, auto-clear each file's status after this many seconds. 0 = off.").addText((text) => {
       text.setValue(String(this.plugin.stateManager.getSettings().reviewAutoMarkSeconds)).onChange(async (value) => {
         const n = parseInt(value, 10);
         if (!isNaN(n) && n >= 0) {
@@ -609,8 +635,16 @@ var SettingsTab = class extends import_obsidian3.PluginSettingTab {
     });
   }
   renderIgnoreSection(el) {
-    new import_obsidian3.Setting(el).setName("Ignore").setHeading();
-    new import_obsidian3.Setting(el).setName("Ignored paths").setDesc("Files under these folders are never marked unread. Type to search vault folders, then pick a suggestion or press Enter to add.").addText((text) => {
+    new import_obsidian4.Setting(el).setName("Ignore").setHeading();
+    new import_obsidian4.Setting(el).setName("Only track Markdown (.md)").setDesc("Keep reading status and saved file snapshots for Markdown files only. Enabling removes existing non-Markdown reading records; disabling does not restore them. Vault files are not deleted.").addToggle((toggle) => {
+      toggle.setValue(this.plugin.stateManager.getSettings().markdownOnly).onChange(async (value) => {
+        this.plugin.stateManager.updateSettings({ markdownOnly: value });
+        await this.plugin.stateManager.save();
+        this.plugin.refreshUI();
+        this.display();
+      });
+    });
+    new import_obsidian4.Setting(el).setName("Ignored paths").setDesc("Files under these folders are never marked unread. Type to search vault folders, then pick a suggestion or press Enter to add.").addText((text) => {
       text.setPlaceholder("Search folders\u2026");
       const suggest = new FolderSuggest(this.app, text.inputEl);
       suggest.onSelect((folder) => {
@@ -634,7 +668,7 @@ var SettingsTab = class extends import_obsidian3.PluginSettingTab {
       const removeBtn = row.createEl("button", { text: "\u2715" });
       removeBtn.addEventListener("click", () => this.removeIgnoredPath(path));
     }
-    new import_obsidian3.Setting(el).setName("Ignored extensions").setDesc('Comma-separated list without dots (e.g. "pdf, png, jpg").').addText((text) => {
+    new import_obsidian4.Setting(el).setName("Ignored extensions").setDesc('Comma-separated list without dots (e.g. "pdf, png, jpg").').addText((text) => {
       text.setValue(this.plugin.stateManager.getSettings().ignoreExtensions.join(", ")).onChange(async (value) => {
         const exts = value.split(",").map((s) => s.trim()).filter(Boolean);
         this.plugin.stateManager.updateSettings({ ignoreExtensions: exts });
@@ -658,14 +692,14 @@ var SettingsTab = class extends import_obsidian3.PluginSettingTab {
     this.display();
   }
   renderStatusSection(el) {
-    new import_obsidian3.Setting(el).setName("Statuses").setHeading();
+    new import_obsidian4.Setting(el).setName("Statuses").setHeading();
     el.createEl("p", {
       text: 'Each status can be applied via right-click. Statuses marked "Count in folder badges & queue" appear in folder badges and the review queue.',
       cls: "setting-item-description"
     });
     const listEl = el.createDiv({ cls: "unread-plus-status-list" });
     this.renderStatusList(listEl);
-    new import_obsidian3.Setting(el).addButton(
+    new import_obsidian4.Setting(el).addButton(
       (btn) => btn.setButtonText("Add status").setCta().onClick(async () => {
         const configs = this.plugin.stateManager.getStatusConfigs();
         configs.push({
@@ -760,7 +794,7 @@ var SettingsTab = class extends import_obsidian3.PluginSettingTab {
       const deleteBtn = row.createEl("button", { text: "\u2715" });
       deleteBtn.addEventListener("click", () => {
         if (configs.length <= 1) {
-          new import_obsidian3.Notice("At least one status is required.");
+          new import_obsidian4.Notice("At least one status is required.");
           return;
         }
         const affectedPaths = Object.entries(this.plugin.stateManager.getAllFileStatuses()).filter(([, status]) => status.statusId === config.id).map(([path]) => path);
@@ -781,12 +815,12 @@ var SettingsTab = class extends import_obsidian3.PluginSettingTab {
     }
   }
   renderReviewSection(el) {
-    new import_obsidian3.Setting(el).setName("Queue (Ctrl+Shift+U)").setHeading();
+    new import_obsidian4.Setting(el).setName("Queue (Ctrl+Shift+U)").setHeading();
     el.createEl("p", {
       text: 'Opens all files with a status (Unread, Later, \u2026) one by one. "Count in folder badges & queue" on each status controls which ones appear here.',
       cls: "setting-item-description"
     });
-    new import_obsidian3.Setting(el).setName("Queue order").addDropdown((drop) => {
+    new import_obsidian4.Setting(el).setName("Queue order").addDropdown((drop) => {
       drop.addOption("created", "Oldest first").addOption("folder", "By folder").addOption("random", "Random").setValue(this.plugin.stateManager.getSettings().reviewOrder).onChange(async (value) => {
         this.plugin.stateManager.updateSettings({
           reviewOrder: value
@@ -796,7 +830,7 @@ var SettingsTab = class extends import_obsidian3.PluginSettingTab {
     });
   }
   renderSnoozeSection(el) {
-    new import_obsidian3.Setting(el).setName("Snoozed files").setHeading();
+    new import_obsidian4.Setting(el).setName("Snoozed files").setHeading();
     const now = Date.now();
     const snoozed = Object.entries(this.plugin.stateManager.getAllFileStatuses()).filter(
       (entry) => !!entry[1].snoozedUntil && entry[1].snoozedUntil > now
@@ -809,7 +843,7 @@ var SettingsTab = class extends import_obsidian3.PluginSettingTab {
       return;
     }
     for (const [path, status] of snoozed) {
-      new import_obsidian3.Setting(el).setName(path).setDesc(`Wakes up in ${formatRemaining(status.snoozedUntil - now)}`).addButton(
+      new import_obsidian4.Setting(el).setName(path).setDesc(`Wakes up in ${formatRemaining(status.snoozedUntil - now)}`).addButton(
         (btn) => btn.setButtonText("Unsnooze").onClick(async () => {
           this.plugin.stateManager.clearSnooze(path);
           await this.plugin.stateManager.save();
@@ -820,8 +854,8 @@ var SettingsTab = class extends import_obsidian3.PluginSettingTab {
     }
   }
   renderResetSection(el) {
-    new import_obsidian3.Setting(el).setName("Danger zone").setHeading();
-    new import_obsidian3.Setting(el).setName("Reset to defaults").setDesc("Resets all settings and statuses back to their defaults. This cannot be undone.").addButton(
+    new import_obsidian4.Setting(el).setName("Danger zone").setHeading();
+    new import_obsidian4.Setting(el).setName("Reset to defaults").setDesc("Resets all settings and statuses back to their defaults. This cannot be undone.").addButton(
       (btn) => btn.setButtonText("Reset to defaults").setWarning().onClick(() => {
         new ConfirmModal(
           this.app,
@@ -840,7 +874,7 @@ var SettingsTab = class extends import_obsidian3.PluginSettingTab {
 };
 
 // src/review-mode.ts
-var import_obsidian4 = require("obsidian");
+var import_obsidian5 = require("obsidian");
 
 // src/sort-entries.ts
 function sortEntries(entries, order) {
@@ -881,7 +915,7 @@ var ReviewMode = class {
     this.index = -1;
     this.active = this.queue.length > 0;
     if (!this.active) {
-      new import_obsidian4.Notice("Unread+: All clear \u2713");
+      new import_obsidian5.Notice("Unread+: All clear \u2713");
     }
   }
   async next(app, stateManager, plugin) {
@@ -890,7 +924,7 @@ var ReviewMode = class {
       this.index++;
       if (this.index >= this.queue.length) {
         this.stop();
-        new import_obsidian4.Notice("Unread+: All clear \u2713");
+        new import_obsidian5.Notice("Unread+: All clear \u2713");
         return;
       }
       if (await this.tryOpenCurrent(app, stateManager, plugin)) return;
@@ -900,7 +934,7 @@ var ReviewMode = class {
     if (!this.active) return;
     while (true) {
       if (this.index <= 0) {
-        new import_obsidian4.Notice("Unread+: Already at the first file");
+        new import_obsidian5.Notice("Unread+: Already at the first file");
         return;
       }
       this.index--;
@@ -913,11 +947,11 @@ var ReviewMode = class {
   async tryOpenCurrent(app, stateManager, plugin) {
     const path = this.queue[this.index];
     const file = app.vault.getAbstractFileByPath(path);
-    if (!(file instanceof import_obsidian4.TFile)) {
+    if (!(file instanceof import_obsidian5.TFile)) {
       return false;
     }
     await app.workspace.getLeaf(false).openFile(file);
-    new import_obsidian4.Notice(`Unread+: ${this.index + 1} von ${this.queue.length}`);
+    new import_obsidian5.Notice(`Unread+: ${this.index + 1} von ${this.queue.length}`);
     const seconds = stateManager.getSettings().reviewAutoMarkSeconds;
     if (seconds > 0) {
       if (this.autoMarkTimer !== null) window.clearTimeout(this.autoMarkTimer);
@@ -940,7 +974,7 @@ var ReviewMode = class {
 };
 
 // src/overview-block.ts
-var import_obsidian5 = require("obsidian");
+var import_obsidian6 = require("obsidian");
 
 // src/overview-data.ts
 function selectOverviewEntries(fileStatuses, isSnoozed, params, allowedStatusIds) {
@@ -962,7 +996,7 @@ function computeOverviewStats(entries, statusConfigs) {
 }
 
 // src/overview-block.ts
-var OverviewBlockChild = class extends import_obsidian5.MarkdownRenderChild {
+var OverviewBlockChild = class extends import_obsidian6.MarkdownRenderChild {
   constructor(containerEl, app, stateManager, plugin, params) {
     super(containerEl);
     this.app = app;
@@ -1027,7 +1061,7 @@ var OverviewBlockChild = class extends import_obsidian5.MarkdownRenderChild {
       link.addEventListener("click", (evt) => {
         evt.preventDefault();
         const file = this.app.vault.getAbstractFileByPath(path);
-        if (file instanceof import_obsidian5.TFile) {
+        if (file instanceof import_obsidian6.TFile) {
           void this.app.workspace.getLeaf(false).openFile(file);
         }
       });
@@ -1059,13 +1093,13 @@ function parseOverviewParams(source, knownStatusIds) {
 }
 
 // src/onboarding-modal.ts
-var import_obsidian6 = require("obsidian");
+var import_obsidian7 = require("obsidian");
 var STEPS = [
   { icon: "\u25CF", text: "Colored dots next to file names mark their status (default: unread). Right-click a file to change or clear it." },
   { icon: "\u{1F4C1}", text: "Numbers next to folder names show how many files inside have an open status." },
   { icon: "\u2699\uFE0F", text: "Head to Settings \u2192 Unread+ to customize statuses, colors, and behavior." }
 ];
-var OnboardingModal = class extends import_obsidian6.Modal {
+var OnboardingModal = class extends import_obsidian7.Modal {
   onOpen() {
     const { contentEl } = this;
     contentEl.addClass("unread-plus-onboarding");
@@ -1103,7 +1137,7 @@ function buildReviewMenuItems(params) {
 }
 
 // main.ts
-var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian7.Plugin {
+var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian8.Plugin {
   constructor() {
     super(...arguments);
     this.autoReadTimers = /* @__PURE__ */ new Map();
@@ -1164,7 +1198,7 @@ var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian7.Plugin 
   getOpenFilePaths() {
     const paths = /* @__PURE__ */ new Set();
     this.app.workspace.iterateAllLeaves((leaf) => {
-      if (leaf.view instanceof import_obsidian7.FileView && leaf.view.file) {
+      if (leaf.view instanceof import_obsidian8.FileView && leaf.view.file) {
         paths.add(leaf.view.file.path);
       }
     });
@@ -1240,7 +1274,7 @@ var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian7.Plugin 
     window.setTimeout(() => this.refreshUI(), 150);
   }
   onFileCreated(file) {
-    if (!(file instanceof import_obsidian7.TFile)) return;
+    if (!(file instanceof import_obsidian8.TFile)) return;
     if (this.stateManager.isIgnored(file.path)) return;
     if (this.wasOpenedThisSession(file.path)) return;
     if (this.stateManager.isExplicitlyRead(file.path)) return;
@@ -1412,7 +1446,7 @@ var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian7.Plugin 
         void this.reviewMode.next(this.app, this.stateManager, this);
       }
     });
-    const menu = new import_obsidian7.Menu();
+    const menu = new import_obsidian8.Menu();
     for (const item of items) {
       menu.addItem((menuItem) => menuItem.setTitle(item.title).onClick(item.onClick));
     }
@@ -1531,9 +1565,9 @@ var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian7.Plugin 
   collectFilesRecursive(folder) {
     const result = [];
     for (const child of folder.children) {
-      if (child instanceof import_obsidian7.TFile) {
+      if (child instanceof import_obsidian8.TFile) {
         if (!this.stateManager.isIgnored(child.path)) result.push(child);
-      } else if (child instanceof import_obsidian7.TFolder) {
+      } else if (child instanceof import_obsidian8.TFolder) {
         result.push(...this.collectFilesRecursive(child));
       }
     }
@@ -1548,9 +1582,9 @@ var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian7.Plugin 
       result.push(file);
     };
     for (const file of files) {
-      if (file instanceof import_obsidian7.TFile) {
+      if (file instanceof import_obsidian8.TFile) {
         if (!this.stateManager.isIgnored(file.path)) add(file);
-      } else if (file instanceof import_obsidian7.TFolder) {
+      } else if (file instanceof import_obsidian8.TFolder) {
         for (const f of this.collectFilesRecursive(file)) add(f);
       }
     }
@@ -1581,7 +1615,7 @@ var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian7.Plugin 
     );
     this.registerEvent(
       this.app.workspace.on("file-menu", (menu, file) => {
-        if (file instanceof import_obsidian7.TFolder) {
+        if (file instanceof import_obsidian8.TFolder) {
           const folderFiles = this.collectFilesRecursive(file);
           if (folderFiles.length === 0) return;
           const unreadConfig = this.stateManager.getStatusConfig("unread");
@@ -1602,7 +1636,7 @@ var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian7.Plugin 
           });
           return;
         }
-        if (!(file instanceof import_obsidian7.TFile)) return;
+        if (!(file instanceof import_obsidian8.TFile) || this.stateManager.isIgnored(file.path)) return;
         const configs = this.stateManager.getStatusConfigs();
         const current = this.stateManager.getStatus(file.path);
         menu.addSeparator();

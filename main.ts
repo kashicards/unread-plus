@@ -464,7 +464,7 @@ export default class UnreadPlusPlugin extends Plugin {
     this.overviewRefreshCallbacks.delete(cb);
   }
 
-  private refreshUI(): void {
+  refreshUI(): void {
     this.badgeRenderer.refresh();
     this.updateStatusBar();
     this.overviewRefreshCallbacks.forEach(cb => cb());
@@ -592,7 +592,7 @@ export default class UnreadPlusPlugin extends Plugin {
           return;
         }
 
-        if (!(file instanceof TFile)) return;
+        if (!(file instanceof TFile) || this.stateManager.isIgnored(file.path)) return;
 
         const configs = this.stateManager.getStatusConfigs();
         const current = this.stateManager.getStatus(file.path);

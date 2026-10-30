@@ -1,4 +1,4 @@
-import { Plugin } from 'obsidian';
+import { Plugin, TFolder } from 'obsidian';
 import {
   PluginData, FileStatus, StatusConfig, UnreadPlusSettings, DEFAULT_DATA,
 } from './types';
@@ -27,6 +27,7 @@ export class StateManager {
       onboardingShown: saved.onboardingShown ?? true,
     };
     this.migrate();
+    this.prepareDataForSave();
   }
 
   private migrate(): void {
@@ -55,13 +56,33 @@ export class StateManager {
     }
   }
 
+  private isTrackedFile(path: string): boolean {
+    return !this.data.settings.markdownOnly || /\.md$/i.test(path);
+  }
+
+  private prepareDataForSave(): PluginData {
+    if (!this.data.settings.markdownOnly) return this.data;
+
+    this.data.fileStatuses = Object.fromEntries(
+      Object.entries(this.data.fileStatuses).filter(([path]) => this.isTrackedFile(path))
+    );
+    this.data.knownPaths = this.data.knownPaths.filter(path => this.isTrackedFile(path));
+    this.data.readPaths = this.data.readPaths.filter(path => this.isTrackedFile(path));
+    this.data.lastOpenPaths = this.data.lastOpenPaths.filter(path => this.isTrackedFile(path));
+    // Folder move markers exempt their Markdown descendants from offline detection.
+    this.data.movedPaths = this.data.movedPaths.filter(path =>
+      this.isTrackedFile(path) || this.plugin.app.vault.getAbstractFileByPath(path) instanceof TFolder
+    );
+    return this.data;
+  }
+
   private saveTimer: number | null = null;
 
   scheduleSave(): void {
     if (this.saveTimer !== null) window.clearTimeout(this.saveTimer);
     this.saveTimer = window.setTimeout(() => {
       this.saveTimer = null;
-      this.plugin.saveData(this.data).catch(() => {});
+      this.plugin.saveData(this.prepareDataForSave()).catch(() => {});
     }, 300);
   }
 
@@ -70,22 +91,24 @@ export class StateManager {
       window.clearTimeout(this.saveTimer);
       this.saveTimer = null;
     }
-    await this.plugin.saveData(this.data);
+    await this.plugin.saveData(this.prepareDataForSave());
   }
 
   async save(): Promise<void> {
-    await this.plugin.saveData(this.data);
+    await this.plugin.saveData(this.prepareDataForSave());
   }
 
   // --- File status ---
 
   setStatus(path: string, statusId: string): void {
+    if (!this.isTrackedFile(path)) return;
     this.data.fileStatuses[path] = { statusId, markedAt: Date.now() };
     const idx = this.data.readPaths.indexOf(path);
     if (idx !== -1) this.data.readPaths.splice(idx, 1);
   }
 
   clearStatus(path: string): void {
+    if (!this.isTrackedFile(path)) return;
     delete this.data.fileStatuses[path];
     if (!this.data.readPaths.includes(path)) this.data.readPaths.push(path);
   }
@@ -156,6 +179,7 @@ export class StateManager {
         this.data.readPaths.push(p);
       }
     }
+    this.prepareDataForSave();
   }
 
   deletePath(path: string): void {
@@ -237,7 +261,7 @@ export class StateManager {
   }
 
   setKnownPaths(paths: string[]): void {
-    this.data.knownPaths = paths;
+    this.data.knownPaths = paths.filter(path => this.isTrackedFile(path));
   }
 
   getLastCloseTime(): number {
@@ -253,7 +277,7 @@ export class StateManager {
   }
 
   setLastOpenPaths(paths: string[]): void {
-    this.data.lastOpenPaths = paths;
+    this.data.lastOpenPaths = paths.filter(path => this.isTrackedFile(path));
   }
 
   // --- Moved paths ---
@@ -301,11 +325,13 @@ export class StateManager {
 
   updateSettings(patch: Partial<UnreadPlusSettings>): void {
     this.data.settings = { ...this.data.settings, ...patch };
+    this.prepareDataForSave();
   }
 
   // --- Ignore ---
 
   isIgnored(path: string): boolean {
+    if (!this.isTrackedFile(path)) return true;
     const { ignorePaths, ignoreExtensions } = this.data.settings;
     if (ignorePaths.some(p => path === p || path.startsWith(p + '/'))) return true;
     const basename = path.split('/').pop() ?? '';

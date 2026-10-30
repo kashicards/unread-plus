@@ -81,6 +81,7 @@ cd unread-plus && npm install && npm run build
 - **Auto-read delay** — auto-clear status after N seconds of the file being open
 - **New file grace period** — how long a newly created file is watched for becoming active before it's marked unread (protects fast create → paste → switch-away workflows)
 - **Show label in badge** — display `Unread ●` instead of just `●`
+- **Only track Markdown (.md)** — optional (off by default). Track only `.md` files, including uppercase `.MD`, and keep attachments, scripts, logs, and other file types out of reading status and saved file snapshots. Enabling removes their existing reading records; disabling does not restore those records. Vault files are not deleted.
 - **Ignored paths / extensions** — never track certain folders or file types. Folder paths are typed with autocomplete suggestions from your vault; `json` is excluded by default.
 - **Statuses** — add, rename, recolor, give each an optional icon/emoji, and reorder them by drag-and-drop. "Count in folder badges & queue" controls folder badges and queue inclusion. Deleting a status asks for confirmation and shows how many files are affected.
 
@@ -92,3 +93,21 @@ cd unread-plus && npm install && npm run build
 
 - **Queue** — order and auto-mark behavior for `Ctrl+Shift+U`
 - **Reset to defaults** — resets all settings and statuses back to their defaults, behind a confirmation dialog
+
+### Sync storage
+
+Unread+ saves reading progress and offline-detection path snapshots together in
+`data.json`. A save writes the whole state, so a large vault can produce large
+historical copies when a sync service versions this file. The default ignored
+extensions are not a Markdown allowlist, and ignoring a file type alone does not
+remove its paths from offline-detection snapshots.
+
+If you only read Markdown notes, enable **Only track Markdown (.md)** to reduce
+both current state and the size of future sync versions. Markdown statuses,
+timestamps, snoozes, explicitly read notes, and folder-move markers are preserved.
+Install this version on every device before enabling the option; older running
+versions do not enforce the filter and can write non-Markdown records again.
+
+This option does not delete existing remote history, change your sync service's
+retention policy, or limit how many future versions it keeps. It also does not
+change how often Unread+ saves the remaining state.

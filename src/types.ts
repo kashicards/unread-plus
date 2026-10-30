@@ -13,6 +13,7 @@ export interface StatusConfig {
 }
 
 export interface UnreadPlusSettings {
+  markdownOnly: boolean;
   autoReadSeconds: number;
   ignorePaths: string[];
   ignoreExtensions: string[];
@@ -46,6 +47,7 @@ export const DEFAULT_STATUS_CONFIGS: StatusConfig[] = [
 ];
 
 export const DEFAULT_SETTINGS: UnreadPlusSettings = {
+  markdownOnly: false,
   autoReadSeconds: 0,
   ignorePaths: [],
   ignoreExtensions: ['json'],
