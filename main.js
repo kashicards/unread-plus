@@ -429,7 +429,7 @@ var BadgeRenderer = class {
       if (this.stateManager.isSnoozed(path)) return;
       const config = configMap.get(status.statusId);
       if (!config) return;
-      const dot = activeDocument.createSpan();
+      const dot = titleEl.createSpan();
       dot.className = "unread-plus-dot";
       dot.setAttribute("data-status", status.statusId);
       dot.style.setProperty("--dot-color", config.color);
@@ -444,7 +444,6 @@ var BadgeRenderer = class {
       if (settings.badgeShowLabel) {
         dot.setAttribute("data-label", config.label);
       }
-      titleEl.appendChild(dot);
     });
   }
   renderFolderBadges(container) {
@@ -461,24 +460,20 @@ var BadgeRenderer = class {
       if (!path) return;
       const count = folderCounts.get(path);
       if (!count || count.segments.length === 0) return;
-      const badge = activeDocument.createSpan();
+      const badge = titleEl.createSpan();
       badge.className = "unread-plus-folder-badge";
       for (const seg of count.segments) {
-        const segEl = activeDocument.createSpan();
+        const segEl = badge.createSpan();
         segEl.className = "unread-plus-folder-badge-segment";
         segEl.style.color = seg.color;
         segEl.title = `${seg.count} ${seg.label}`;
-        const countEl = activeDocument.createSpan();
+        const countEl = segEl.createSpan();
         countEl.className = "unread-plus-folder-badge-count";
         countEl.textContent = String(seg.count);
-        const iconEl = activeDocument.createSpan();
+        const iconEl = segEl.createSpan();
         iconEl.className = "unread-plus-folder-badge-icon";
         iconEl.textContent = (_a = seg.icon) != null ? _a : "\u25CF";
-        segEl.appendChild(countEl);
-        segEl.appendChild(iconEl);
-        badge.appendChild(segEl);
       }
-      titleEl.appendChild(badge);
     });
   }
   attachObserver() {
@@ -1556,11 +1551,10 @@ var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian8.Plugin 
       this.scheduleSnoozeWakeup();
     }, delay);
   }
-  makeMenuDot(color, char = "\u25CF") {
-    const span = activeDocument.createSpan();
+  appendMenuDot(parent, color, char = "\u25CF") {
+    const span = parent.createSpan();
     span.textContent = char + " ";
     span.setCssStyles({ color, fontSize: "10px", marginRight: "2px" });
-    return span;
   }
   collectFilesRecursive(folder) {
     const result = [];
@@ -1600,14 +1594,14 @@ var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian8.Plugin 
         if (unreadConfig) {
           menu.addItem((item) => {
             const frag = createFragment();
-            frag.appendChild(this.makeMenuDot(unreadConfig.color));
+            this.appendMenuDot(frag, unreadConfig.color);
             frag.appendText("Mark selected as Unread");
             item.setTitle(frag).onClick(() => this.setFilesStatus(selectedFiles, unreadConfig.id));
           });
         }
         menu.addItem((item) => {
           const frag = createFragment();
-          frag.appendChild(this.makeMenuDot("var(--text-muted)", "\u25CB"));
+          this.appendMenuDot(frag, "var(--text-muted)", "\u25CB");
           frag.appendText("Mark selected as read");
           item.setTitle(frag).onClick(() => this.clearFilesStatus(selectedFiles));
         });
@@ -1623,14 +1617,14 @@ var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian8.Plugin 
           if (unreadConfig) {
             menu.addItem((item) => {
               const frag = createFragment();
-              frag.appendChild(this.makeMenuDot(unreadConfig.color));
+              this.appendMenuDot(frag, unreadConfig.color);
               frag.appendText("Mark all as Unread");
               item.setTitle(frag).onClick(() => this.setFilesStatus(folderFiles, unreadConfig.id));
             });
           }
           menu.addItem((item) => {
             const frag = createFragment();
-            frag.appendChild(this.makeMenuDot("var(--text-muted)", "\u25CB"));
+            this.appendMenuDot(frag, "var(--text-muted)", "\u25CB");
             frag.appendText("Mark all as read");
             item.setTitle(frag).onClick(() => this.clearFilesStatus(folderFiles));
           });
@@ -1644,7 +1638,7 @@ var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian8.Plugin 
           if ((current == null ? void 0 : current.statusId) === config.id) continue;
           menu.addItem((item) => {
             const frag = createFragment();
-            frag.appendChild(this.makeMenuDot(config.color));
+            this.appendMenuDot(frag, config.color);
             frag.appendText(config.label);
             item.setTitle(frag).onClick(() => this.setFileStatus(file.path, config.id));
           });
@@ -1678,7 +1672,7 @@ var _UnreadPlusPlugin = class _UnreadPlusPlugin extends import_obsidian8.Plugin 
           menu.addSeparator();
           menu.addItem((item) => {
             const frag = createFragment();
-            if (currentConfig) frag.appendChild(this.makeMenuDot(currentConfig.color, "\u25CB"));
+            if (currentConfig) this.appendMenuDot(frag, currentConfig.color, "\u25CB");
             frag.appendText("Mark as read");
             item.setTitle(frag).onClick(() => this.clearFileStatus(file.path));
           });

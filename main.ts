@@ -499,11 +499,10 @@ export default class UnreadPlusPlugin extends Plugin {
     }, delay);
   }
 
-  private makeMenuDot(color: string, char = '●'): HTMLSpanElement {
-    const span = activeDocument.createSpan();
+  private appendMenuDot(parent: DocumentFragment, color: string, char = '●'): void {
+    const span = parent.createSpan();
     span.textContent = char + ' ';
     span.setCssStyles({ color, fontSize: '10px', marginRight: '2px' });
-    return span;
   }
 
   private collectFilesRecursive(folder: TFolder): TFile[] {
@@ -549,7 +548,7 @@ export default class UnreadPlusPlugin extends Plugin {
         if (unreadConfig) {
           menu.addItem(item => {
             const frag = createFragment();
-            frag.appendChild(this.makeMenuDot(unreadConfig.color));
+            this.appendMenuDot(frag, unreadConfig.color);
             frag.appendText('Mark selected as Unread');
             item.setTitle(frag).onClick(() => this.setFilesStatus(selectedFiles, unreadConfig.id));
           });
@@ -557,7 +556,7 @@ export default class UnreadPlusPlugin extends Plugin {
 
         menu.addItem(item => {
           const frag = createFragment();
-          frag.appendChild(this.makeMenuDot('var(--text-muted)', '○'));
+          this.appendMenuDot(frag, 'var(--text-muted)', '○');
           frag.appendText('Mark selected as read');
           item.setTitle(frag).onClick(() => this.clearFilesStatus(selectedFiles));
         });
@@ -577,7 +576,7 @@ export default class UnreadPlusPlugin extends Plugin {
           if (unreadConfig) {
             menu.addItem(item => {
               const frag = createFragment();
-              frag.appendChild(this.makeMenuDot(unreadConfig.color));
+              this.appendMenuDot(frag, unreadConfig.color);
               frag.appendText('Mark all as Unread');
               item.setTitle(frag).onClick(() => this.setFilesStatus(folderFiles, unreadConfig.id));
             });
@@ -585,7 +584,7 @@ export default class UnreadPlusPlugin extends Plugin {
 
           menu.addItem(item => {
             const frag = createFragment();
-            frag.appendChild(this.makeMenuDot('var(--text-muted)', '○'));
+            this.appendMenuDot(frag, 'var(--text-muted)', '○');
             frag.appendText('Mark all as read');
             item.setTitle(frag).onClick(() => this.clearFilesStatus(folderFiles));
           });
@@ -603,7 +602,7 @@ export default class UnreadPlusPlugin extends Plugin {
           if (current?.statusId === config.id) continue;
           menu.addItem(item => {
             const frag = createFragment();
-            frag.appendChild(this.makeMenuDot(config.color));
+            this.appendMenuDot(frag, config.color);
             frag.appendText(config.label);
             item.setTitle(frag).onClick(() => this.setFileStatus(file.path, config.id));
           });
@@ -640,7 +639,7 @@ export default class UnreadPlusPlugin extends Plugin {
           menu.addSeparator();
           menu.addItem(item => {
             const frag = createFragment();
-            if (currentConfig) frag.appendChild(this.makeMenuDot(currentConfig.color, '○'));
+            if (currentConfig) this.appendMenuDot(frag, currentConfig.color, '○');
             frag.appendText('Mark as read');
             item.setTitle(frag).onClick(() => this.clearFileStatus(file.path));
           });

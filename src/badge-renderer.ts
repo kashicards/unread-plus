@@ -62,7 +62,7 @@ export class BadgeRenderer {
       const config = configMap.get(status.statusId);
       if (!config) return;
 
-      const dot = activeDocument.createSpan();
+      const dot = titleEl.createSpan();
       dot.className = 'unread-plus-dot';
       dot.setAttribute('data-status', status.statusId);
       dot.style.setProperty('--dot-color', config.color);
@@ -80,8 +80,6 @@ export class BadgeRenderer {
       if (settings.badgeShowLabel) {
         dot.setAttribute('data-label', config.label);
       }
-
-      titleEl.appendChild(dot);
     });
   }
 
@@ -101,27 +99,22 @@ export class BadgeRenderer {
       const count = folderCounts.get(path);
       if (!count || count.segments.length === 0) return;
 
-      const badge = activeDocument.createSpan();
+      const badge = titleEl.createSpan();
       badge.className = 'unread-plus-folder-badge';
       for (const seg of count.segments) {
-        const segEl = activeDocument.createSpan();
+        const segEl = badge.createSpan();
         segEl.className = 'unread-plus-folder-badge-segment';
         segEl.style.color = seg.color;
         segEl.title = `${seg.count} ${seg.label}`;
 
-        const countEl = activeDocument.createSpan();
+        const countEl = segEl.createSpan();
         countEl.className = 'unread-plus-folder-badge-count';
         countEl.textContent = String(seg.count);
 
-        const iconEl = activeDocument.createSpan();
+        const iconEl = segEl.createSpan();
         iconEl.className = 'unread-plus-folder-badge-icon';
         iconEl.textContent = seg.icon ?? '●';
-
-        segEl.appendChild(countEl);
-        segEl.appendChild(iconEl);
-        badge.appendChild(segEl);
       }
-      titleEl.appendChild(badge);
     });
   }
 
